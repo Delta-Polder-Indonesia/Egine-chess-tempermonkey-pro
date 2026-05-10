@@ -101,6 +101,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
 // @connect      unpkg.com
 // @connect      jsdelivr.net
 // @connect      raw.githubusercontent.com
+// @connect      drive.google.com
 // @antifeature  none
 // ==/UserScript==
 
@@ -11840,7 +11841,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     // =====================================================
-    // End of Bintang Toba Pro Pro
+    // End of Chess.com Assistant Pro
     // =====================================================
 
 })();
