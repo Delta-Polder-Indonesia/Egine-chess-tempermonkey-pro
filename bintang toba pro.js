@@ -12,26 +12,26 @@
                                                                      ██║     ██║  ██║██║╚██████╔╝██████╔╝███████╗    ███████╗╚██████╔╝███████╗███████║
                                                                      ╚═╝     ╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═════╝ ╚══════╝    ╚══════╝ ╚═════╝ ╚══════╝╚══════╝
 =================================================================================================================================================================================================================================
-#	Fitur	                                         Status                   # Bug/isue	                                                   Fix
+#	Fitur	                                         Status                   #	Kategori	  Masalah	                                                             Solusi
 
-1	Tampermonkey Polyfills	                          ✅                      🟥 Event dispatch to Chess.com settings                         🟨 Filter board-only
-2	Stockfish Multi-Source Loader	                  ✅                      🟥 Duplicate delay in _handleMainBestMove	                     🟨 Deleted
-3	SmartPremove v6 + 6 Upgrade Intelligence	      ✅                      🟥 _analyzeRecapture uses fen instead of predictedFen           🟨 Fixed
-4	Engine Management (Main/Analysis/Premove)	      ✅                      🟥 _multiPvConvergenceCheck uses analyzeSafety heavily	         🟨 Change light check
-5	Skill Level slider (0-20) — BARU	              ✅                      🟥 Duplikat header UPGRADE #2	                                 🟨 Cleaned
-6	Depth slider + Auto Depth Adapt	                  ✅                      🟥 Auto-play stalls when eval drops                             🟨 Approval Token System
-7	Human Mode (ELO/Level)	                          ✅                      🟥 Skill Level is not in the Engine Facade              	     🟨 Added
-8	Analysis Mode + Auto Play Color	                  ✅
-9	Clock Sync + Time Management	                  ✅
-10	Move Executor (Click/Drag Bezier)	              ✅
-11	Syzygy Tablebase	                              ✅
-12	Opening Book	                                  ✅
-13	ACPL Tracking	                                  ✅
-14	PV/Bestmove Arrows	                              ✅
-15	Auto Resign	                                      ✅
-16	Auto Match	                                      ✅
-17	CCT Analysis	                                  ✅
-18	Panic/Stream-proof Mode	                          ✅
+1	Tampermonkey Polyfills	                          ✅                     1	🔴 Bug	    Analysis auto-play MoveExecutor.movePiece() fire-and-forget	           Ditambahkan .then() + .catch() handler
+2	Stockfish Multi-Source Loader	                  ✅                     2	🔴 Bug  	stockfishSourceCode module-level vs EngineLoader redundancy            Dihapus duplikasinya, semua pakai EngineLoader.stockfishSourceCode
+3	SmartPremove v6 + 6 Upgrade Intelligence	      ✅                     3	🔴 Bug  	_clickMove async tanpa await — (ternyata sudah OK, ada await)	       ✅ Verified
+4	Engine Management (Main/Analysis/Premove)	      ✅                     4	🟡 Race  	_parseMainInfo dipanggil setelah bestmove	                           Single-threaded JS aman, tidak ada race nyata
+5	Skill Level slider (0-20) — BARU	              ✅                     5	🟡 Race	    _doRun double engine-go    	                                           Ditambahkan _goLock flag dengan auto-release 300ms
+6	Depth slider + Auto Depth Adapt	                  ✅                     6	🟡 Race 	analysisCheck() sync di mainLoop	                                   ✅ Aman (JS single-thread), scheduleNextMainLoop setelah selesai
+7	Human Mode (ELO/Level)	                          ✅                     7	🟡 Race 	Timeout premove vs bestmove basi	                                   Handler _onPremoveMessage sekarang cek _premoveEngineBusy sebelum proses pesan
+8	Analysis Mode + Auto Play Color	                  ✅                     8	🟡 Race 	Drag state stale setelah re-render	                                   Drag state di-reset per setupDrag() call — tidak ada state panel lama
+9	Clock Sync + Time Management	                  ✅                     9	👻 Ghost	premoveInFlight tidak pernah di-set true	                           Dihapus dari deklarasi dan referensinya
+10	Move Executor (Click/Drag Bezier)	              ✅                    10	👻 Ghost	premoveSafetyCache tidak pernah ditulisi	                           Dibersihkan (cache tetap ada untuk future use, tidak error)
+11	Syzygy Tablebase	                              ✅                    11	👻 Ghost	ATTACK_CACHE tidak pernah ditulisi	                                   Dihapus semua deklarasi, referensi, dan trimObject helper
+12	Opening Book	                                  ✅                    12	👻 Ghost	Consent modal dead code (70+ baris)	                                   Dihapus, fungsi sekarang hanya 6 baris: set onboarding → callback
+13	ACPL Tracking	                                  ✅                    13	🟠 Opt  	stockfishSourceCode definisi ganda	                                   Unifikasi ke EngineLoader.stockfishSourceCode
+14	PV/Bestmove Arrows	                              ✅                    14	🟠 Opt  	normalizeEvaluation(evaluation, ourColor) param unused	               Diperbaiki jadi normalizeEvaluation(evaluation)
+15	Auto Resign	                                      ✅                    15	🟠 Opt  	Section 23 hilang	                                                   Dibiarkan (bukan bug, mungkin memang sengaja skip)
+16	Auto Match	                                      ✅                    16	🟠 Opt  	CSS stream-proof typo .chess - assist	                               Diperbaiki jadi .chess-assist-arrow dll tanpa spasi
+17	CCT Analysis	                                  ✅                    17	🟠 Opt  	Auto-resign trigger dari _parseMainInfo (multi-panggil)	               Dipindahkan ke _handleMainBestMove (1x per siklus)
+18	Panic/Stream-proof Mode	                          ✅                    18	🟠 Opt  	Double _removePVArrowsByType di PV draw path	                       Dihapus dari _doPVDraw, hanya ada di drawPVArrows
 19	Settings Export/Import	                          ✅
 20	Runtime Watchdog + Self-Heal	                  ✅
 
@@ -242,7 +242,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
                     self.loadFromURL(source.url)
                         .then(function (code) {
                         self.stockfishSourceCode = code;
-                        stockfishSourceCode = code;
                         log("Stockfish loaded from:", source.url, "Size:", code.length);
                         resolve(true);
                     })
@@ -282,7 +281,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
                     let resource = GM_getResourceText("stockfishjs");
                     if (resource && resource.length > 50000) {
                         self.stockfishSourceCode = resource;
-                        stockfishSourceCode = resource;
                         resolve(true);
                         return;
                     }
@@ -336,6 +334,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
             return false;
         }
     }
+
     const ErrorTelemetry = {
         moduleCounts: {
             engine: 0,
@@ -524,8 +523,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     };
 
     let PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
-
-
 
     let OPENING_BOOK = {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": {
@@ -909,6 +906,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         lastEvalClass1: "eval-equal",
         principalVariation: "",
         statusInfo: "",
+        evalBarStatus: "Loading...",
         isAnalysisThinking: false,
         currentDelayMs: 0,
         moveExecutionInProgress: false,
@@ -1238,14 +1236,12 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     let cachedGame = null;
     let cachedGameTimestamp = 0;
     let GAME_CACHE_TTL = 100;
-    let premoveInFlight = false;
     let pendingMoveTimeoutId = null;
     let _resignObserver = null;
     let _resignTimeout = null;
     let _resignTriggerCount = 0;
     let _resignTriggerNeeded = 3;
-    let ATTACK_CACHE = Object.create(null);
-    let stockfishSourceCode = "";
+    // stockfishSourceCode now accessed via EngineLoader.stockfishSourceCode
     let _allLoopsActive = true;
     let _premoveCacheClearInterval = null;
     let _panelHotkeysBound = false;
@@ -1366,10 +1362,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
             if (Syzygy && Syzygy.cache && Syzygy.cache.size > 80) {
                 issues.push("syzygyCache=" + Syzygy.cache.size);
                 Syzygy.clear();
-            }
-            if (ATTACK_CACHE && Object.keys(ATTACK_CACHE).length > 220) {
-                issues.push("attackCache=" + Object.keys(ATTACK_CACHE).length);
-                trimCaches();
             }
 
             if (issues.length > 0) {
@@ -1848,1172 +1840,302 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
 
         _staticExchangeEval(fen, from, to, ourColor) {
             const oppColor = ourColor === "w" ? "b" : "w";
-
             const movingPiece = pieceFromFenChar(fenCharAtSquare(fen, from));
             const capturedPiece = pieceFromFenChar(fenCharAtSquare(fen, to));
-
             if (!movingPiece || !capturedPiece) return 0;
-
             const afterMoveFen = makeSimpleMove(fen, from, to);
             if (!afterMoveFen) return 0;
-
-            const oppAttackers = getAttackersOfSquare(afterMoveFen, to, oppColor)
-            .map(a => PIECE_VALUES[a.piece] || 0)
-            .sort((a, b) => a - b);
-
-            const ourDefenders = getAttackersOfSquare(afterMoveFen, to, ourColor)
-            .map(a => PIECE_VALUES[a.piece] || 0)
-            .sort((a, b) => a - b);
-
+            const oppAttackers = getAttackersOfSquare(afterMoveFen, to, oppColor).map(a => PIECE_VALUES[a.piece] || 0).sort((a, b) => a - b);
+            const ourDefenders = getAttackersOfSquare(afterMoveFen, to, ourColor).map(a => PIECE_VALUES[a.piece] || 0).sort((a, b) => a - b);
             const capturedVal = PIECE_VALUES[capturedPiece.type] || 0;
             const ourPieceVal = PIECE_VALUES[movingPiece.type] || 0;
-
             const gains = [capturedVal];
             let currentPieceVal = ourPieceVal;
-            let oppIdx = 0;
-            let ourIdx = 0;
-            let isOppTurn = true;
-
+            let oppIdx = 0, ourIdx = 0, isOppTurn = true;
             for (let depth = 0; depth < 16; depth++) {
-                if (isOppTurn) {
-                    if (oppIdx >= oppAttackers.length) break;
-                    gains.push(currentPieceVal);
-                    currentPieceVal = oppAttackers[oppIdx++];
-                } else {
-                    if (ourIdx >= ourDefenders.length) break;
-                    gains.push(currentPieceVal);
-                    currentPieceVal = ourDefenders[ourIdx++];
-                }
+                if (isOppTurn) { if (oppIdx >= oppAttackers.length) break; gains.push(currentPieceVal); currentPieceVal = oppAttackers[oppIdx++]; }
+                else { if (ourIdx >= ourDefenders.length) break; gains.push(currentPieceVal); currentPieceVal = ourDefenders[ourIdx++]; }
                 isOppTurn = !isOppTurn;
             }
-
             let value = 0;
-            for (let i = gains.length - 1; i > 0; i--) {
-                value = Math.max(0, gains[i] - value);
-            }
-
+            for (let i = gains.length - 1; i > 0; i--) { value = Math.max(0, gains[i] - value); }
             return gains[0] - value;
         },
 
         _findOurHangingPieces(fen, ourColor) {
             if (!fen || !ourColor) return [];
-
             const pieces = getAllPieces(fen, ourColor);
             const oppColor = ourColor === "w" ? "b" : "w";
             const result = [];
-
             for (const p of pieces) {
                 if (p.type === "k") continue;
-
                 const attackers = getAttackersOfSquare(fen, p.square, oppColor);
                 if (!attackers.length) continue;
-
                 const defenders = getAttackersOfSquare(fen, p.square, ourColor);
                 const val = PIECE_VALUES[p.type] || 0;
-
-                if (!defenders.length) {
-                    result.push(p);
-                    continue;
-                }
-
+                if (!defenders.length) { result.push(p); continue; }
                 const minAtk = Math.min(...attackers.map(a => PIECE_VALUES[a.piece] || 99));
                 if (minAtk < val) result.push(p);
             }
-
             return result;
         },
 
         _findHangingPieces(fen, color) {
             if (!fen || !color) return [];
-
             const pieces = getAllPieces(fen, color);
             const opp = color === "w" ? "b" : "w";
             const result = [];
-
             for (const p of pieces) {
                 if (p.type === "k") continue;
-
                 const attackers = getAttackersOfSquare(fen, p.square, opp);
                 if (!attackers.length) continue;
-
                 const defenders = getAttackersOfSquare(fen, p.square, color);
                 const val = PIECE_VALUES[p.type] || 0;
                 const minAtk = Math.min(...attackers.map(a => PIECE_VALUES[a.piece] || 99));
-
                 if (!defenders.length || minAtk < val) result.push(p);
             }
-
             return result;
         },
 
         _detectForkAfterMove(fen, square, pieceType, ourColor) {
             const oppColor = ourColor === "w" ? "b" : "w";
             const attacked = getSquaresAttackedByPiece(fen, square, pieceType, ourColor);
-
             const valuableTargets = [];
             for (const sq of attacked) {
                 const piece = pieceFromFenChar(fenCharAtSquare(fen, sq));
                 if (piece && piece.color === oppColor) {
                     const val = PIECE_VALUES[piece.type] || 0;
-                    if (val >= 3 || piece.type === 'k') {
-                        valuableTargets.push({ square: sq, type: piece.type, value: val });
-                    }
+                    if (val >= 3 || piece.type === 'k') { valuableTargets.push({ square: sq, type: piece.type, value: val }); }
                 }
             }
-
             if (valuableTargets.length >= 2) {
                 const totalValue = valuableTargets.reduce((s, t) => s + t.value, 0);
                 const hasKing = valuableTargets.some(t => t.type === 'k');
-                return {
-                    value: hasKing ? Math.min(totalValue, 15) : Math.min(totalValue, 10),
-                    targets: valuableTargets,
-                    description: `Fork: ${pieceType.toUpperCase()} attacks ${valuableTargets.map(t => t.type.toUpperCase()).join(" & ")}`
-                };
+                return { value: hasKing ? Math.min(totalValue, 15) : Math.min(totalValue, 10), targets: valuableTargets, description: `Fork: ${pieceType.toUpperCase()} attacks ${valuableTargets.map(t => t.type.toUpperCase()).join(" & ")}` };
             }
-
             return null;
         },
 
         _detectPinAfterMove(fen, square, pieceType, ourColor) {
             if (!['q', 'r', 'b'].includes(pieceType)) return null;
-
             const oppColor = ourColor === "w" ? "b" : "w";
             const oppKing = findKing(fen, oppColor);
             if (!oppKing) return null;
-
             const directions = [];
             if (pieceType === 'q' || pieceType === 'r') directions.push([1, 0], [-1, 0], [0, 1], [0, -1]);
             if (pieceType === 'q' || pieceType === 'b') directions.push([1, 1], [1, -1], [-1, 1], [-1, -1]);
-
             const sf = "abcdefgh".indexOf(square[0]);
             const sr = parseInt(square[1], 10);
-
             for (const [dx, dy] of directions) {
-                let f = sf + dx;
-                let r = sr + dy;
-                let firstPiece = null;
-
+                let f = sf + dx, r = sr + dy, firstPiece = null;
                 while (f >= 0 && f <= 7 && r >= 1 && r <= 8) {
                     const sq = "abcdefgh"[f] + r;
                     const ch = fenCharAtSquare(fen, sq);
-
                     if (ch) {
                         const p = pieceFromFenChar(ch);
                         if (!p) break;
-
-                        if (!firstPiece) {
-                            if (p.color === oppColor) {
-                                firstPiece = { square: sq, piece: p };
-                            } else {
-                                break;
-                            }
-                        } else {
-                            if (p.color === oppColor && p.type === 'k') {
-                                return {
-                                    pinnedPiece: firstPiece.piece.type,
-                                    pinnedSquare: firstPiece.square,
-                                    description: `Pin: ${pieceType.toUpperCase()} pins ${firstPiece.piece.type.toUpperCase()} to king`
-                                };
-                            }
-                            break;
-                        }
+                        if (!firstPiece) { if (p.color === oppColor) { firstPiece = { square: sq, piece: p }; } else { break; } }
+                        else { if (p.color === oppColor && p.type === 'k') { return { pinnedPiece: firstPiece.piece.type, pinnedSquare: firstPiece.square, description: `Pin: ${pieceType.toUpperCase()} pins ${firstPiece.piece.type.toUpperCase()} to king` }; } break; }
                     }
-
-                    f += dx;
-                    r += dy;
+                    f += dx; r += dy;
                 }
             }
-
             return null;
         },
 
         analyzeSafety(fen, uci, ourColor, config) {
-            const failResult = (msg) => ({
-                safe: false, riskScore: 999, warnings: [msg], riskLevel: 100
-            });
-
+            const failResult = (msg) => ({ safe: false, riskScore: 999, warnings: [msg], riskLevel: 100 });
             if (!fen || !uci || uci.length < 4) return failResult("Invalid input");
             if (!ourColor || (ourColor !== "w" && ourColor !== "b")) return failResult("Invalid color");
-
-            const from = uci.slice(0, 2);
-            const to = uci.slice(2, 4);
-            const promo = uci.length > 4 ? uci[4] : null;
-
+            const from = uci.slice(0, 2), to = uci.slice(2, 4), promo = uci.length > 4 ? uci[4] : null;
             const piece = pieceFromFenChar(fenCharAtSquare(fen, from));
             if (!piece) return failResult("No piece found");
             if (piece.color !== ourColor) return failResult("Not our piece");
-
             const newFen = makeSimpleMove(fen, from, to, promo);
             if (!newFen) return failResult("Invalid move");
-
             const oppColor = ourColor === "w" ? "b" : "w";
-            let riskScore = 0;
-            const warnings = [];
-
+            let riskScore = 0; const warnings = [];
             const ourKing = findKing(newFen, ourColor);
-            if (ourKing && isSquareAttackedBy(newFen, ourKing, oppColor)) {
-                return { safe: false, riskScore: 1000, warnings: ["King exposed - ILLEGAL"], riskLevel: 100 };
-            }
-
+            if (ourKing && isSquareAttackedBy(newFen, ourKing, oppColor)) { return { safe: false, riskScore: 1000, warnings: ["King exposed - ILLEGAL"], riskLevel: 100 }; }
             const ourKingBefore = findKing(fen, ourColor);
             if (ourKingBefore && piece.type !== 'k') {
                 if (isPiecePinned(fen, from, ourKingBefore, ourColor, oppColor)) {
                     const kingAfter = findKing(newFen, ourColor);
-                    if (kingAfter && isSquareAttackedBy(newFen, kingAfter, oppColor)) {
-                        return { safe: false, riskScore: 1000, warnings: ["Moving pinned piece - ILLEGAL"], riskLevel: 100 };
-                    }
-                    riskScore += this.RISK_MULTIPLIERS.PIN_PENALTY;
-                    warnings.push("Moving previously pinned piece");
+                    if (kingAfter && isSquareAttackedBy(newFen, kingAfter, oppColor)) { return { safe: false, riskScore: 1000, warnings: ["Moving pinned piece - ILLEGAL"], riskLevel: 100 }; }
+                    riskScore += this.RISK_MULTIPLIERS.PIN_PENALTY; warnings.push("Moving previously pinned piece");
                 }
             }
-
             const attackers = getAttackersOfSquare(newFen, to, oppColor);
             const defenders = getAttackersOfSquare(newFen, to, ourColor);
             const capturedCh = fenCharAtSquare(fen, to);
             const capturedPiece = pieceFromFenChar(capturedCh);
-            const capturedVal = (capturedPiece && capturedPiece.color === oppColor)
-            ? (PIECE_VALUES[capturedPiece.type] || 0) : 0;
-
+            const capturedVal = (capturedPiece && capturedPiece.color === oppColor) ? (PIECE_VALUES[capturedPiece.type] || 0) : 0;
             if (attackers.length > 0) {
                 const pieceVal = PIECE_VALUES[piece.type] || 0;
                 const minAtkVal = Math.min(...attackers.map(a => PIECE_VALUES[a.piece] || 99));
-
-                if (defenders.length === 0) {
-                    const netLoss = pieceVal - capturedVal;
-                    if (netLoss > 0) {
-                        riskScore += netLoss * this.RISK_MULTIPLIERS.PIECE_HANGING;
-                        warnings.push(`${piece.type.toUpperCase()} hangs (net loss: ${netLoss})`);
-                    }
-                } else if (minAtkVal < pieceVal && capturedVal < pieceVal) {
-                    const netLoss = pieceVal - Math.max(capturedVal, minAtkVal);
-                    if (netLoss > 0) {
-                        riskScore += netLoss * this.RISK_MULTIPLIERS.BAD_TRADE;
-                        warnings.push(`Bad trade: ${piece.type.toUpperCase()} (net: -${netLoss})`);
-                    }
-                }
+                if (defenders.length === 0) { const netLoss = pieceVal - capturedVal; if (netLoss > 0) { riskScore += netLoss * this.RISK_MULTIPLIERS.PIECE_HANGING; warnings.push(`${piece.type.toUpperCase()} hangs (net loss: ${netLoss})`); } }
+                else if (minAtkVal < pieceVal && capturedVal < pieceVal) { const netLoss = pieceVal - Math.max(capturedVal, minAtkVal); if (netLoss > 0) { riskScore += netLoss * this.RISK_MULTIPLIERS.BAD_TRADE; warnings.push(`Bad trade: ${piece.type.toUpperCase()} (net: -${netLoss})`); } }
             }
-
-            const oppLongRange = getAllPieces(newFen, oppColor).filter(p =>
-                                                                       ['q', 'r', 'b'].includes(p.type)
-                                                                      );
-
+            const oppLongRange = getAllPieces(newFen, oppColor).filter(p => ['q', 'r', 'b'].includes(p.type));
             for (const oppPiece of oppLongRange) {
-                const ourValuable = getAllPieces(newFen, ourColor).filter(p =>
-                                                                          (PIECE_VALUES[p.type] || 0) >= 5 || p.type === 'k'
-                                                                         );
-
+                const ourValuable = getAllPieces(newFen, ourColor).filter(p => (PIECE_VALUES[p.type] || 0) >= 5 || p.type === 'k');
                 for (const target of ourValuable) {
                     const attackedNow = canPieceAttackSquare(newFen, oppPiece, target.square);
                     const attackedBefore = canPieceAttackSquare(fen, oppPiece, target.square);
-
                     if (attackedNow && !attackedBefore) {
-                        riskScore += this.RISK_MULTIPLIERS.DISCOVERED_CHECK_PENALTY;
-                        warnings.push(`Discovered attack on our ${target.type.toUpperCase()} by ${oppPiece.type.toUpperCase()}`);
-
-                        if (target.type === 'k') {
-                            riskScore += 100;
-                            warnings.push("DISCOVERED CHECK against our king!");
-                        }
+                        riskScore += this.RISK_MULTIPLIERS.DISCOVERED_CHECK_PENALTY; warnings.push(`Discovered attack on our ${target.type.toUpperCase()} by ${oppPiece.type.toUpperCase()}`);
+                        if (target.type === 'k') { riskScore += 100; warnings.push("DISCOVERED CHECK against our king!"); }
                     }
                 }
             }
-
             const leftBehind = this._checkLeftBehindPieces(fen, newFen, from, to, ourColor, oppColor);
-            if (leftBehind.totalRisk > 0) {
-                riskScore += leftBehind.totalRisk;
-                warnings.push(...leftBehind.warnings);
-            }
-
-            if (piece.type === 'k') {
-                const kingSafety = this._evaluateKingSafety(newFen, to, ourColor, oppColor);
-                riskScore += kingSafety.risk;
-                warnings.push(...kingSafety.warnings);
-            }
-
-            if (piece.type === 'q') {
-                const queenTrapped = this._isQueenTrapped(newFen, to, ourColor, oppColor);
-                if (queenTrapped) {
-                    riskScore += 80;
-                    warnings.push("QUEEN may be trapped!");
-                }
-            }
-
+            if (leftBehind.totalRisk > 0) { riskScore += leftBehind.totalRisk; warnings.push(...leftBehind.warnings); }
+            if (piece.type === 'k') { const kingSafety = this._evaluateKingSafety(newFen, to, ourColor, oppColor); riskScore += kingSafety.risk; warnings.push(...kingSafety.warnings); }
+            if (piece.type === 'q') { const queenTrapped = this._isQueenTrapped(newFen, to, ourColor, oppColor); if (queenTrapped) { riskScore += 80; warnings.push("QUEEN may be trapped!"); } }
             const maxRisk = config.maxRiskScore || 500;
             const safeThreshold = config.riskTolerance * this.RISK_MULTIPLIERS.SAFE_THRESHOLD;
             const safe = riskScore <= safeThreshold;
-
-            return {
-                safe,
-                riskScore: Math.min(riskScore, maxRisk),
-                warnings,
-                riskLevel: Math.min(100, riskScore / this.RISK_MULTIPLIERS.RISK_LEVEL_DIVISOR)
-            };
+            return { safe, riskScore: Math.min(riskScore, maxRisk), warnings, riskLevel: Math.min(100, riskScore / this.RISK_MULTIPLIERS.RISK_LEVEL_DIVISOR) };
         },
 
         _checkLeftBehindPieces(oldFen, newFen, from, to, ourColor, oppColor) {
-            let totalRisk = 0;
-            const warnings = [];
+            let totalRisk = 0; const warnings = [];
             const ourPieces = getAllPieces(oldFen, ourColor);
-
             for (const p of ourPieces) {
-                if (p.square === from) continue;
-                if (p.type === 'k') continue;
-
+                if (p.square === from || p.type === 'k') continue;
                 const wasDefendedByUs = isSquareDefendedBy(oldFen, p.square, from);
                 if (!wasDefendedByUs) continue;
-
                 const stillDefendedByMoved = isSquareDefendedBy(newFen, p.square, to);
                 const otherDefenders = getAttackersOfSquare(newFen, p.square, ourColor);
-                const stillDefended = stillDefendedByMoved || otherDefenders.length > 0;
-
-                if (stillDefended) continue;
-
-                const attackers = getAttackersOfSquare(newFen, p.square, oppColor);
-                if (attackers.length > 0) {
-                    const val = PIECE_VALUES[p.type] || 0;
-                    totalRisk += val * 8;
-                    warnings.push(`${p.type.toUpperCase()} at ${p.square} left undefended and attacked`);
-                }
+                if (stillDefendedByMoved || otherDefenders.length > 0) continue;
+                const atk = getAttackersOfSquare(newFen, p.square, oppColor);
+                if (atk.length > 0) { const val = PIECE_VALUES[p.type] || 0; totalRisk += val * 8; warnings.push(`${p.type.toUpperCase()} at ${p.square} left undefended and attacked`); }
             }
-
             return { totalRisk, warnings };
         },
 
         _evaluateKingSafety(fen, kingSquare, ourColor, oppColor) {
-            let risk = 0;
-            const warnings = [];
-            const kf = "abcdefgh".indexOf(kingSquare[0]);
-            const kr = parseInt(kingSquare[1], 10);
+            let risk = 0; const warnings = [];
+            const kf = "abcdefgh".indexOf(kingSquare[0]), kr = parseInt(kingSquare[1], 10);
             let unsafeNeighbors = 0;
-
-            for (let df = -1; df <= 1; df++) {
-                for (let dr = -1; dr <= 1; dr++) {
-                    if (df === 0 && dr === 0) continue;
-                    const nf = kf + df;
-                    const nr = kr + dr;
-                    if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue;
-                    const sq = "abcdefgh"[nf] + nr;
-                    if (isSquareAttackedBy(fen, sq, oppColor)) unsafeNeighbors++;
-                }
-            }
-
-            if (unsafeNeighbors >= 5) {
-                risk += this.RISK_MULTIPLIERS.KING_SAFETY_WEIGHT * 2;
-                warnings.push("King destination very exposed");
-            } else if (unsafeNeighbors >= 3) {
-                risk += this.RISK_MULTIPLIERS.KING_SAFETY_WEIGHT;
-                warnings.push("King destination somewhat exposed");
-            }
-
+            for (let df = -1; df <= 1; df++) { for (let dr = -1; dr <= 1; dr++) { if (df === 0 && dr === 0) continue; const nf = kf + df, nr = kr + dr; if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue; if (isSquareAttackedBy(fen, "abcdefgh"[nf] + nr, oppColor)) unsafeNeighbors++; } }
+            if (unsafeNeighbors >= 5) { risk += this.RISK_MULTIPLIERS.KING_SAFETY_WEIGHT * 2; warnings.push("King destination very exposed"); }
+            else if (unsafeNeighbors >= 3) { risk += this.RISK_MULTIPLIERS.KING_SAFETY_WEIGHT; warnings.push("King destination somewhat exposed"); }
             return { risk, warnings };
         },
 
         _isQueenTrapped(fen, queenSquare, ourColor, oppColor) {
             const escapes = getQueenEscapeSquares(fen, queenSquare, ourColor);
-            const safeEscapes = escapes.filter(sq => {
-                const ch = fenCharAtSquare(fen, sq);
-                if (ch) {
-                    const p = pieceFromFenChar(ch);
-                    if (p && p.color === ourColor) return false;
-                }
-                return !isSquareAttackedBy(fen, sq, oppColor);
-            });
+            const safeEscapes = escapes.filter(sq => { const ch = fenCharAtSquare(fen, sq); if (ch) { const p = pieceFromFenChar(ch); if (p && p.color === ourColor) return false; } return !isSquareAttackedBy(fen, sq, oppColor); });
             return safeEscapes.length <= 1;
         },
 
         _validateCaptureQuality(fen, uci, ourColor, config) {
-            const from = uci.substring(0, 2);
-            const to = uci.substring(2, 4);
-
-            if (isEnPassantCapture(fen, from, to, ourColor)) {
-                return { ok: true };
-            }
-
+            const from = uci.substring(0, 2), to = uci.substring(2, 4);
+            if (isEnPassantCapture(fen, from, to, ourColor)) return { ok: true };
             const movingPiece = pieceFromFenChar(fenCharAtSquare(fen, from));
             const capturedPiece = pieceFromFenChar(fenCharAtSquare(fen, to));
-
-            if (!capturedPiece) {
-                return { ok: false, reason: "Tidak ada piece yang diambil" };
-            }
-
+            if (!capturedPiece) return { ok: false, reason: "Tidak ada piece yang diambil" };
             const capturedVal = PIECE_VALUES[capturedPiece.type] || 0;
             const ourVal = PIECE_VALUES[movingPiece ? movingPiece.type : 'p'] || 0;
-
-            if (config.minCaptureValue && capturedVal < config.minCaptureValue) {
-                return {
-                    ok: false,
-                    reason: `Capture terlalu murah: ${capturedVal} < min ${config.minCaptureValue}`
-                };
-            }
-
-            if (config.requirePositiveExchange) {
-                const see = this._staticExchangeEval(fen, from, to, ourColor);
-                const minSEE = config.minSEEValue || 0;
-
-                if (see < minSEE) {
-                    return {
-                        ok: false,
-                        reason: `Exchange tidak menguntungkan (SEE: ${see}, minimum: ${minSEE})`
-                    };
-                }
-            }
-
-            if (config.avoidLossyCapture && movingPiece) {
-                const oppColor = ourColor === "w" ? "b" : "w";
-                const newFen = makeSimpleMove(fen, from, to);
-
-                if (newFen) {
-                    const attackers = getAttackersOfSquare(newFen, to, oppColor);
-                    const defenders = getAttackersOfSquare(newFen, to, ourColor);
-
-                    if (attackers.length > 0 && defenders.length === 0) {
-                        const netLoss = ourVal - capturedVal;
-                        const maxNetLoss = config.maxNetLoss !== undefined ? config.maxNetLoss : 0;
-
-                        if (netLoss > maxNetLoss) {
-                            return {
-                                ok: false,
-                                reason: `Capture berisiko: net loss ${netLoss} melebihi batas ${maxNetLoss}`
-                            };
-                        }
-                    }
-                }
-            }
-
+            if (config.minCaptureValue && capturedVal < config.minCaptureValue) return { ok: false, reason: `Capture terlalu murah: ${capturedVal} < min ${config.minCaptureValue}` };
+            if (config.requirePositiveExchange) { const see = this._staticExchangeEval(fen, from, to, ourColor); if (see < (config.minSEEValue || 0)) return { ok: false, reason: `Exchange tidak menguntungkan (SEE: ${see})` }; }
+            if (config.avoidLossyCapture && movingPiece) { const oppColor = ourColor === "w" ? "b" : "w"; const newFen = makeSimpleMove(fen, from, to); if (newFen) { const atk = getAttackersOfSquare(newFen, to, oppColor); const def = getAttackersOfSquare(newFen, to, ourColor); if (atk.length > 0 && def.length === 0) { const netLoss = ourVal - capturedVal; if (netLoss > (config.maxNetLoss !== undefined ? config.maxNetLoss : 0)) return { ok: false, reason: `Capture berisiko: net loss ${netLoss}` }; } } }
             return { ok: true };
         },
 
         _validateMoveQuality(fen, uci, ourColor, tactical, config) {
-            const from = uci.substring(0, 2);
-            const to = uci.substring(2, 4);
-
+            const from = uci.substring(0, 2), to = uci.substring(2, 4);
             const movingPiece = pieceFromFenChar(fenCharAtSquare(fen, from));
             if (!movingPiece) return { ok: false, reason: "Piece tidak ditemukan" };
-
             const oppColor = ourColor === "w" ? "b" : "w";
-
             if (tactical.isBrilliant) return { ok: true };
-
             if (tactical.score >= 5) return { ok: true };
-
             const minScore = config.minTacticalScore !== undefined ? config.minTacticalScore : -3;
-            if (tactical.score < minScore) {
-                return {
-                    ok: false,
-                    reason: `Taktik lemah: score ${tactical.score} < minimum ${minScore}`
-                };
-            }
-
+            if (tactical.score < minScore) return { ok: false, reason: `Taktik lemah: score ${tactical.score} < minimum ${minScore}` };
             const newFen = makeSimpleMove(fen, from, to);
             if (!newFen) return { ok: true };
-
-            const attackers = getAttackersOfSquare(newFen, to, oppColor);
-            const defenders = getAttackersOfSquare(newFen, to, ourColor);
+            const atk = getAttackersOfSquare(newFen, to, oppColor);
+            const def = getAttackersOfSquare(newFen, to, ourColor);
             const val = PIECE_VALUES[movingPiece.type] || 0;
-
-            if (val >= 5 && attackers.length > 0 && defenders.length === 0) {
-                return {
-                    ok: false,
-                    reason: `${movingPiece.type.toUpperCase()} digantung di ${to}`
-                };
-            }
-
-            if (val >= 3 && attackers.length > 0 && defenders.length === 0) {
-                const minAtk = Math.min(...attackers.map(a => PIECE_VALUES[a.piece] || 99));
-                if (minAtk < val) {
-                    return {
-                        ok: false,
-                        reason: `${movingPiece.type.toUpperCase()} diserang piece lebih murah di ${to}`
-                    };
-                }
-            }
-
+            if (val >= 5 && atk.length > 0 && def.length === 0) return { ok: false, reason: `${movingPiece.type.toUpperCase()} digantung di ${to}` };
+            if (val >= 3 && atk.length > 0 && def.length === 0) { const minAtk = Math.min(...atk.map(a => PIECE_VALUES[a.piece] || 99)); if (minAtk < val) return { ok: false, reason: `${movingPiece.type.toUpperCase()} diserang piece lebih murah di ${to}` }; }
             const ourKing = findKing(fen, ourColor);
-            if (ourKing && movingPiece.type !== 'k') {
-                if (isPiecePinned(fen, from, ourKing, ourColor, oppColor)) {
-                    return {
-                        ok: false,
-                        reason: "Move melepas pin - berbahaya"
-                    };
-                }
-            }
-
+            if (ourKing && movingPiece.type !== 'k' && isPiecePinned(fen, from, ourKing, ourColor, oppColor)) return { ok: false, reason: "Move melepas pin - berbahaya" };
             return { ok: true };
         },
 
         calculateConfidence(scoreInfo, tactical, safety, config) {
             let score = 50;
-
             if (scoreInfo) {
-                if (scoreInfo.type === "mate") {
-                    const mate = scoreInfo.value;
-                    const dist = Math.abs(mate);
-
-                    if (mate < 0) {
-                        if (dist <= 1) score += 35;
-                        else if (dist <= 2) score += 28;
-                        else if (dist <= 4) score += 18;
-                        else if (dist <= 6) score += 10;
-                        else score += 5;
-                    } else {
-                        if (dist <= 1) score -= 50;
-                        else if (dist <= 2) score -= 35;
-                        else if (dist <= 4) score -= 20;
-                        else score -= 10;
-                    }
-                } else {
-                    const ourAdv = -(scoreInfo.value || 0) / 100;
-
-                    if (ourAdv >= 8) score += 28;
-                    else if (ourAdv >= 5) score += 22;
-                    else if (ourAdv >= 3) score += 16;
-                    else if (ourAdv >= 1.5) score += 10;
-                    else if (ourAdv >= 0.5) score += 5;
-                    else if (ourAdv >= 0) score += 0;
-                    else if (ourAdv >= -1) score -= 8;
-                    else if (ourAdv >= -2) score -= 16;
-                    else if (ourAdv >= -4) score -= 24;
-                    else score -= 32;
-                }
+                if (scoreInfo.type === "mate") { const mate = scoreInfo.value, dist = Math.abs(mate); if (mate < 0) { if (dist <= 1) score += 35; else if (dist <= 2) score += 28; else if (dist <= 4) score += 18; else if (dist <= 6) score += 10; else score += 5; } else { if (dist <= 1) score -= 50; else if (dist <= 2) score -= 35; else if (dist <= 4) score -= 20; else score -= 10; } }
+                else { const ourAdv = -(scoreInfo.value || 0) / 100; if (ourAdv >= 8) score += 28; else if (ourAdv >= 5) score += 22; else if (ourAdv >= 3) score += 16; else if (ourAdv >= 1.5) score += 10; else if (ourAdv >= 0.5) score += 5; else if (ourAdv >= 0) score += 0; else if (ourAdv >= -1) score -= 8; else if (ourAdv >= -2) score -= 16; else if (ourAdv >= -4) score -= 24; else score -= 32; }
             }
-
-            if (tactical.isBlunder) {
-                score -= 60;
-            } else if (tactical.isBrilliant) {
-                score += 18;
-            }
-
-            if (tactical.score > 0) {
-                score += Math.min(config.tacticalBonus || 10, tactical.score * 2);
-            } else if (tactical.score < 0) {
-                score += Math.max(-30, tactical.score * 3);
-            }
-
-            if (safety.riskScore > 0) {
-                const risk = safety.riskScore;
-                let penalty;
-
-                if (risk <= 20) penalty = risk * 0.3;
-                else if (risk <= 50) penalty = 6 + (risk - 20) * 0.6;
-                else if (risk <= 100) penalty = 24 + (risk - 50) * 0.8;
-                else penalty = 64 + (risk - 100) * 1.0;
-
-                score -= Math.min(45, penalty);
-            }
-
+            if (tactical.isBlunder) score -= 60; else if (tactical.isBrilliant) score += 18;
+            if (tactical.score > 0) score += Math.min(config.tacticalBonus || 10, tactical.score * 2); else if (tactical.score < 0) score += Math.max(-30, tactical.score * 3);
+            if (safety.riskScore > 0) { const risk = safety.riskScore; let penalty; if (risk <= 20) penalty = risk * 0.3; else if (risk <= 50) penalty = 6 + (risk - 20) * 0.6; else if (risk <= 100) penalty = 24 + (risk - 50) * 0.8; else penalty = 64 + (risk - 100) * 1.0; score -= Math.min(45, penalty); }
             const warnCount = safety.warnings ? safety.warnings.length : 0;
-            if (warnCount >= 4) score -= 10;
-            else if (warnCount >= 2) score -= 4;
-
+            if (warnCount >= 4) score -= 10; else if (warnCount >= 2) score -= 4;
             if (this.isInCautiousMode()) score -= 18;
-
             return Math.max(3, Math.min(95, Math.round(score)));
         },
 
-        _isCaptureMove(fen, uci, ourColor) {
-            if (!fen || !uci || uci.length < 4 || !ourColor) return false;
-            const from = uci.substring(0, 2);
-            const to = uci.substring(2, 4);
-            const target = pieceFromFenChar(fenCharAtSquare(fen, to));
-            if (target && target.color !== ourColor) return true;
-            return isEnPassantCapture(fen, from, to, ourColor);
-        },
+        _isCaptureMove(fen, uci, ourColor) { if (!fen || !uci || uci.length < 4 || !ourColor) return false; const from = uci.substring(0, 2), to = uci.substring(2, 4); const target = pieceFromFenChar(fenCharAtSquare(fen, to)); if (target && target.color !== ourColor) return true; return isEnPassantCapture(fen, from, to, ourColor); },
+        _isGoodCapture(fen, uci, ourColor) { if (!this._isCaptureMove(fen, uci, ourColor)) return false; const from = uci.substring(0, 2), to = uci.substring(2, 4); return this._staticExchangeEval(fen, from, to, ourColor) >= 0; },
 
-        _isGoodCapture(fen, uci, ourColor) {
-            if (!this._isCaptureMove(fen, uci, ourColor)) return false;
-            const from = uci.substring(0, 2);
-            const to = uci.substring(2, 4);
-            return this._staticExchangeEval(fen, from, to, ourColor) >= 0;
-        },
+        _multiPvConvergenceCheck(fen, uci, pvMoves, ourColor) { const result = { converged: false, validIn: 0, totalChecked: 0, bonus: 0 }; const oppColor = ourColor === "w" ? "b" : "w"; const oppCandidates = new Set(); if (pvMoves && pvMoves[0]) oppCandidates.add(pvMoves[0]); const fenHash = hashFen(fen); const bucket = (Engine && Engine._premoveCandidates) ? Engine._premoveCandidates[fenHash] : null; if (Array.isArray(bucket)) { bucket.forEach(c => { if (c.pvMoves && c.pvMoves[0]) oppCandidates.add(c.pvMoves[0]); }); } const from = uci.substring(0, 2), to = uci.substring(2, 4), promo = uci[4]; for (const oppMove of oppCandidates) { if (!oppMove || oppMove.length < 4) continue; result.totalChecked++; const predFen = makeSimpleMove(fen, oppMove.slice(0, 2), oppMove.slice(2, 4), oppMove[4]); if (!predFen) continue; const piece = pieceFromFenChar(fenCharAtSquare(predFen, from)); if (!piece || piece.color !== ourColor) continue; const afterFen = makeSimpleMove(predFen, from, to, promo); if (!afterFen) continue; const king = findKing(afterFen, ourColor); if (king && isSquareAttackedBy(afterFen, king, oppColor)) continue; const atk = getAttackersOfSquare(afterFen, to, oppColor); const def = getAttackersOfSquare(afterFen, to, ourColor); const pVal = PIECE_VALUES[piece.type] || 0; if (atk.length > 0 && def.length === 0 && pVal >= 5) continue; result.validIn++; } const ratio = result.totalChecked > 0 ? result.validIn / result.totalChecked : 0; if (ratio >= 1.0) result.bonus = this.HEURISTICS.MULTIPV_FULL_CONSENSUS; else if (ratio >= 0.6) result.bonus = this.HEURISTICS.MULTIPV_PARTIAL_CONSENSUS; else if (ratio < 0.4) result.bonus = this.HEURISTICS.MULTIPV_DIVERGENT_PENALTY; result.converged = ratio >= 0.6; return result; },
 
-        _multiPvConvergenceCheck(fen, uci, pvMoves, ourColor) {
-            const result = { converged: false, validIn: 0, totalChecked: 0, bonus: 0 };
-            const oppColor = ourColor === "w" ? "b" : "w";
-            const oppCandidates = new Set();
+        _analyzeRecapture(predictedFen, uci, ourColor, pvMoves) { const result = { isRecapture: false, bonus: 0, speedMultiplier: 1.0 }; let oppMoveTo = null; if (pvMoves && pvMoves[0] && pvMoves[0].length >= 4) oppMoveTo = pvMoves[0].substring(2, 4); if (!oppMoveTo) { const history = getGameHistory(); if (history.length > 0 && history[history.length - 1].length >= 4) oppMoveTo = history[history.length - 1].substring(2, 4); } if (!oppMoveTo) return result; const myTo = uci.substring(2, 4); if (oppMoveTo !== myTo) return result; const target = pieceFromFenChar(fenCharAtSquare(predictedFen, myTo)); if (!target || target.color === ourColor) return result; const see = this._staticExchangeEval(predictedFen, uci.substring(0, 2), myTo, ourColor); result.isRecapture = true; if (see >= 0) { result.bonus = 35; result.speedMultiplier = 0.5; } else if (see >= -2) { result.bonus = 10; result.speedMultiplier = 0.7; } else { result.bonus = -10; } return result; },
 
-            if (pvMoves && pvMoves[0]) oppCandidates.add(pvMoves[0]);
+        _detectForcedResponse(fen, ourColor) { const result = { isForced: false, bonus: 0 }; const oppColor = ourColor === "w" ? "b" : "w"; const pieces = getAllPieces(fen, oppColor); let reasonableMoves = 0; const oppKing = findKing(fen, oppColor); const weGiveCheck = oppKing && isSquareAttackedBy(fen, oppKing, ourColor); const checkEscapeMoves = []; for (const p of pieces) { const squares = getSquaresAttackedByPiece(fen, p.square, p.type, oppColor); for (const sq of squares) { const testFen = makeSimpleMove(fen, p.square, sq); if (!testFen) continue; const kingAfter = findKing(testFen, oppColor); if (kingAfter && !isSquareAttackedBy(testFen, kingAfter, ourColor)) { reasonableMoves++; if (weGiveCheck) checkEscapeMoves.push(p.square + sq); } if (reasonableMoves > 5) break; } if (reasonableMoves > 5) break; } if (weGiveCheck) { if (checkEscapeMoves.length === 1) { result.bonus = 50; result.isForced = true; } else if (checkEscapeMoves.length <= 3) { result.bonus = 30; result.isForced = true; } else { result.bonus = 12; } } else { if (reasonableMoves <= 1) result.bonus = 30; else if (reasonableMoves <= 3) result.bonus = 15; result.isForced = reasonableMoves <= 3; } return result; },
 
-            const fenHash = hashFen(fen);
-            const bucket = (Engine && Engine._premoveCandidates) ? Engine._premoveCandidates[fenHash] : null;
-            if (Array.isArray(bucket)) {
-                bucket.forEach(c => { if (c.pvMoves && c.pvMoves[0]) oppCandidates.add(c.pvMoves[0]); });
-            }
+        _getTimePressureBonus() { try { const clock = getClockTimes(); if (!clock || !clock.found) return { bonus: 0, speedMultiplier: 1.0 }; const myTime = clock.playerTime, oppTime = clock.opponentTime; let bonus = 0, speedMult = 1.0; if (myTime !== null && myTime < 10) { bonus += 20; speedMult = 0.3; } else if (myTime !== null && myTime < 30) { bonus += 8; speedMult = 0.6; } if (oppTime !== null && oppTime < 10) { bonus += 10; speedMult = Math.min(speedMult, 0.5); } return { bonus, speedMultiplier: speedMult }; } catch (e) { return { bonus: 0, speedMultiplier: 1.0 }; } },
 
-            const from = uci.substring(0, 2), to = uci.substring(2, 4), promo = uci[4];
-            for (const oppMove of oppCandidates) {
-                if (!oppMove || oppMove.length < 4) continue;
-                result.totalChecked++;
-                const predFen = makeSimpleMove(fen, oppMove.slice(0, 2), oppMove.slice(2, 4), oppMove[4]);
-                if (!predFen) continue;
+        _checkBookPremove(fen, ourColor) { if (!State.useOpeningBook || State.moveNumber > 12) return null; const history = getGameHistory(); const bookMove = OpeningBook.getMove(fen, history); if (bookMove && bookMove.length >= 4) return bookMove; return null; },
 
-                const piece = pieceFromFenChar(fenCharAtSquare(predFen, from));
-                if (!piece || piece.color !== ourColor) continue;
+        _checkEndgamePremove(fen) { const fenHash = hashFen(fen); if (Syzygy && Syzygy.cache && Syzygy.cache.has(fenHash)) { const data = Syzygy.cache.get(fenHash).payload; if (data && data.moves && data.moves.length > 0) { const best = data.moves[0]; if (best && best.category !== "loss") return best.uci; } } return null; },
 
-                const afterFen = makeSimpleMove(predFen, from, to, promo);
-                if (!afterFen) continue;
-                const king = findKing(afterFen, ourColor);
-                if (king && isSquareAttackedBy(afterFen, king, oppColor)) continue;
-
-                const atk = getAttackersOfSquare(afterFen, to, oppColor);
-                const def = getAttackersOfSquare(afterFen, to, ourColor);
-                const pVal = PIECE_VALUES[piece.type] || 0;
-                if (atk.length > 0 && def.length === 0 && pVal >= 5) continue;
-
-                result.validIn++;
-            }
-
-            const ratio = result.totalChecked > 0 ? result.validIn / result.totalChecked : 0;
-            if (ratio >= 1.0) result.bonus = this.HEURISTICS.MULTIPV_FULL_CONSENSUS;
-            else if (ratio >= 0.6) result.bonus = this.HEURISTICS.MULTIPV_PARTIAL_CONSENSUS;
-            else if (ratio < 0.4) result.bonus = this.HEURISTICS.MULTIPV_DIVERGENT_PENALTY;
-
-            result.converged = ratio >= 0.6;
-            return result;
-        },
-
-        _analyzeRecapture(predictedFen, uci, ourColor, pvMoves) {
-            const result = { isRecapture: false, bonus: 0, speedMultiplier: 1.0 };
-
-            let oppMoveTo = null;
-            if (pvMoves && pvMoves[0] && pvMoves[0].length >= 4) {
-                oppMoveTo = pvMoves[0].substring(2, 4);
-            }
-            if (!oppMoveTo) {
-                const history = getGameHistory();
-                if (history.length > 0 && history[history.length - 1].length >= 4) {
-                    oppMoveTo = history[history.length - 1].substring(2, 4);
-                }
-            }
-            if (!oppMoveTo) return result;
-
-            const myTo = uci.substring(2, 4);
-            if (oppMoveTo !== myTo) return result;
-
-            const target = pieceFromFenChar(fenCharAtSquare(predictedFen, myTo));
-            if (!target || target.color === ourColor) return result;
-
-            const see = this._staticExchangeEval(predictedFen, uci.substring(0, 2), myTo, ourColor);
-            result.isRecapture = true;
-            if (see >= 0) {
-                result.bonus = 35;
-                result.speedMultiplier = 0.5;
-            } else if (see >= -2) {
-                result.bonus = 10;
-                result.speedMultiplier = 0.7;
-            } else {
-                result.bonus = -10;
-            }
-            return result;
-        },
-
-        _detectForcedResponse(fen, ourColor) {
-            const result = { isForced: false, bonus: 0 };
-            const oppColor = ourColor === "w" ? "b" : "w";
-            const pieces = getAllPieces(fen, oppColor);
-            let reasonableMoves = 0;
-
-            const oppKing = findKing(fen, oppColor);
-            const weGiveCheck = oppKing && isSquareAttackedBy(fen, oppKing, ourColor);
-            const checkEscapeMoves = [];
-
-            for (const p of pieces) {
-                const squares = getSquaresAttackedByPiece(fen, p.square, p.type, oppColor);
-                for (const sq of squares) {
-                    const testFen = makeSimpleMove(fen, p.square, sq);
-                    if (!testFen) continue;
-                    const kingAfter = findKing(testFen, oppColor);
-                    if (kingAfter && !isSquareAttackedBy(testFen, kingAfter, ourColor)) {
-                        reasonableMoves++;
-                        if (weGiveCheck) checkEscapeMoves.push(p.square + sq);
-                    }
-                    if (reasonableMoves > 5) break;
-                }
-                if (reasonableMoves > 5) break;
-            }
-
-            if (weGiveCheck) {
-                if (checkEscapeMoves.length === 1) {
-                    result.bonus = 50;
-                    result.isForced = true;
-                    result.details = "Only 1 escape from check";
-                } else if (checkEscapeMoves.length <= 3) {
-                    result.bonus = 30;
-                    result.isForced = true;
-                    result.details = "Limited escapes from check: " + checkEscapeMoves.length;
-                } else {
-                    result.bonus = 12;
-                    result.details = "In check, but " + checkEscapeMoves.length + " escapes available";
-                }
-            } else {
-                if (reasonableMoves <= 1) result.bonus = 30;
-                else if (reasonableMoves <= 3) result.bonus = 15;
-                result.isForced = reasonableMoves <= 3;
-            }
-            return result;
-        },
-
-        _getTimePressureBonus() {
-            try {
-                const clock = getClockTimes();
-                if (!clock || !clock.found) return { bonus: 0, speedMultiplier: 1.0 };
-
-                const myTime = clock.playerTime;
-                const oppTime = clock.opponentTime;
-
-                let bonus = 0;
-                let speedMult = 1.0;
-
-                if (myTime !== null && myTime < 10) {
-                    bonus += 20;
-                    speedMult = 0.3;
-                } else if (myTime !== null && myTime < 30) {
-                    bonus += 8;
-                    speedMult = 0.6;
-                }
-
-                if (oppTime !== null && oppTime < 10) {
-                    bonus += 10;
-                    speedMult = Math.min(speedMult, 0.5);
-                }
-
-                return { bonus, speedMultiplier: speedMult };
-            } catch (e) {
-                return { bonus: 0, speedMultiplier: 1.0 };
-            }
-        },
-
-        _checkBookPremove(fen, ourColor) {
-            if (!State.useOpeningBook || State.moveNumber > 12) return null;
-            const history = getGameHistory();
-            const bookMove = OpeningBook.getMove(fen, history);
-            if (bookMove && bookMove.length >= 4) return bookMove;
-            return null;
-        },
-
-        _checkEndgamePremove(fen) {
-            const fenHash = hashFen(fen);
-            if (Syzygy && Syzygy.cache && Syzygy.cache.has(fenHash)) {
-                const data = Syzygy.cache.get(fenHash).payload;
-                if (data && data.moves && data.moves.length > 0) {
-                    const best = data.moves[0];
-                    if (best && best.category !== "loss") return best.uci;
-                }
-            }
-            return null;
-        },
-
-        _detectSacrifice(fen, predictedFen, uci, ourColor, pvMoves) {
-            const result = { isSacrifice: false, penalty: 0, details: "" };
-
-            const oppMove = (pvMoves && pvMoves[0] && pvMoves[0].length >= 4) ? pvMoves[0] : null;
-            if (!oppMove) return result;
-
-            const oppFrom = oppMove.substring(0, 2);
-            const oppTo = oppMove.substring(2, 4);
-
-            const capturedByOpp = pieceFromFenChar(fenCharAtSquare(fen, oppTo));
-            if (!capturedByOpp || capturedByOpp.color !== ourColor) return result;
-
-            const oppColor = ourColor === "w" ? "b" : "w";
-
-            const oppSee = this._staticExchangeEval(fen, oppFrom, oppTo, oppColor);
-
-            if (oppSee < 0) {
-                result.isSacrifice = true;
-                const sacrificeDepth = Math.abs(oppSee);
-
-                result.details = `Opp may sacrifice ${capturedByOpp.type} (SEE: ${oppSee})`;
-
-                if (sacrificeDepth >= 5) {
-                    result.penalty = 25;
-                    result.details += " — QUEEN SAC!";
-                } else if (sacrificeDepth >= 3) {
-                    result.penalty = 15;
-                    result.details += " — Piece sac";
-                } else {
-                    result.penalty = 5;
-                    result.details += " — Minor sac";
-                }
-
-                log("[SmartPremove] Sacrifice detected! " + result.details + " penalty: -" + result.penalty);
-            }
-
-            return result;
-        },
+        _detectSacrifice(fen, predictedFen, uci, ourColor, pvMoves) { const result = { isSacrifice: false, penalty: 0, details: "" }; const oppMove = (pvMoves && pvMoves[0] && pvMoves[0].length >= 4) ? pvMoves[0] : null; if (!oppMove) return result; const oppFrom = oppMove.substring(0, 2), oppTo = oppMove.substring(2, 4); const capturedByOpp = pieceFromFenChar(fenCharAtSquare(fen, oppTo)); if (!capturedByOpp || capturedByOpp.color !== ourColor) return result; const oppColor = ourColor === "w" ? "b" : "w"; const oppSee = this._staticExchangeEval(fen, oppFrom, oppTo, oppColor); if (oppSee < 0) { result.isSacrifice = true; const sacrificeDepth = Math.abs(oppSee); result.details = `Opp may sacrifice ${capturedByOpp.type} (SEE: ${oppSee})`; if (sacrificeDepth >= 5) { result.penalty = 25; } else if (sacrificeDepth >= 3) { result.penalty = 15; } else { result.penalty = 5; } } return result; },
 
         _premoveToken: 0,
         _pendingCallbacks: new Set(),
-        _newToken: function () {
-            this._premoveToken = (this._premoveToken || 0) + 1;
-            this._pendingCallbacks.clear();
-            return this._premoveToken;
-        },
-        _isCurrentToken: function (token) {
-            return token === this._premoveToken;
-        },
-        _registerCallback: function (token) {
-            if (!this._isCurrentToken(token)) return false;
-            this._pendingCallbacks.add(token);
-            return true;
-        },
-        _invalidateAllTokens: function () {
-            this._premoveToken = (this._premoveToken || 0) + 1;
-            this._pendingCallbacks.clear();
-        },
+        _newToken: function () { this._premoveToken = (this._premoveToken || 0) + 1; this._pendingCallbacks.clear(); return this._premoveToken; },
+        _isCurrentToken: function (token) { return token === this._premoveToken; },
+        _registerCallback: function (token) { if (!this._isCurrentToken(token)) return false; this._pendingCallbacks.add(token); return true; },
+        _invalidateAllTokens: function () { this._premoveToken = (this._premoveToken || 0) + 1; this._pendingCallbacks.clear(); },
 
-        HEURISTICS: {
-            CHECK_MATE_BONUS: 60,
-            SINGLE_ESCAPE_BONUS: 50,
-            FORCED_MOVE_BONUS_HIGH: 30,
-            FORCED_MOVE_BONUS_LOW: 15,
-            RECAPTURE_SAFE_BONUS: 35,
-            RECAPTURE_MARGINAL_BONUS: 10,
-            RECAPTURE_BAD_PENALTY: -10,
-            MULTIPV_FULL_CONSENSUS: 25,
-            MULTIPV_PARTIAL_CONSENSUS: 12,
-            MULTIPV_DIVERGENT_PENALTY: -15,
-            PV_CONSENSUS_MAX: 30,
-            TIME_PRESSURE_CRITICAL: 25,
-            TIME_PRESSURE_NORMAL: 12,
-            OPPONENT_LOW_TIME_BONUS: 10,
+        HEURISTICS: { CHECK_MATE_BONUS: 60, SINGLE_ESCAPE_BONUS: 50, FORCED_MOVE_BONUS_HIGH: 30, FORCED_MOVE_BONUS_LOW: 15, RECAPTURE_SAFE_BONUS: 35, RECAPTURE_MARGINAL_BONUS: 10, RECAPTURE_BAD_PENALTY: -10, MULTIPV_FULL_CONSENSUS: 25, MULTIPV_PARTIAL_CONSENSUS: 12, MULTIPV_DIVERGENT_PENALTY: -15, PV_CONSENSUS_MAX: 30, TIME_PRESSURE_CRITICAL: 25, TIME_PRESSURE_NORMAL: 12, OPPONENT_LOW_TIME_BONUS: 10, SACRIFICE_QUEEN_PENALTY: 25, SACRIFICE_PIECE_PENALTY: 15, SACRIFICE_MINOR_PENALTY: 5, VOLATILITY_HIGH_PENALTY: 5, TACTICAL_EXPLOSION_MAX: 10, REPLY_TREE_BAD: 3, VOLATILITY_BLOCK: 95, EXPLOSION_BLOCK: 80, RISK_CRITICAL: 1000, DELAY_RECAPTURE: 0.35, DELAY_FORCED: 0.5, DELAY_CONVERGED: 0.7, DELAY_SACRIFICE: 2.2, DELAY_VOLATILE: 1.6, DELAY_BOOK_TB: 0.35, DELAY_MIN_MS: 150, DELAY_MAX_MS: 2000, TC_BULLET_BOOST: 30, TC_BLITZ_BOOST: 15, TC_CLASSICAL_PENALTY: -10 },
 
-            SACRIFICE_QUEEN_PENALTY: 25,
-            SACRIFICE_PIECE_PENALTY: 15,
-            SACRIFICE_MINOR_PENALTY: 5,
-            VOLATILITY_HIGH_PENALTY: 5,
-            TACTICAL_EXPLOSION_MAX: 10,
-            REPLY_TREE_BAD: 3,
+        _calculatePositionVolatility(fen) { let score = 0; const parts = fen.split(" "); const placement = parts[0]; const turn = parts[1] || "w"; const oppColor = turn === "w" ? "b" : "w"; const pieceMatch = placement.match(/[pnbrqkPNBRQK]/g); score += (pieceMatch ? pieceMatch.length : 0) * 3; const ourKing = findKing(fen, turn); if (ourKing && isSquareAttackedBy(fen, ourKing, oppColor)) score += 40; const oppKing = findKing(fen, oppColor); if (oppKing && isSquareAttackedBy(fen, oppKing, turn)) score += 25; const ourPieces = getAllPieces(fen, turn); let hangingCount = 0; for (const p of ourPieces) { if (p.type === "k") continue; const atk = getAttackersOfSquare(fen, p.square, oppColor).length; const def = getAttackersOfSquare(fen, p.square, turn).length; if (atk > 0 && def === 0) hangingCount += PIECE_VALUES[p.type] || 0; } score += hangingCount * 10; let captureOpportunities = 0; for (const p of ourPieces) { const sqs = getSquaresAttackedByPiece(fen, p.square, p.type, turn); for (const s of sqs) { const target = pieceFromFenChar(fenCharAtSquare(fen, s)); if (target && target.color === oppColor) captureOpportunities++; } } score += Math.min(captureOpportunities, 10) * 2; let totalMoves = 0; for (const p of ourPieces) { totalMoves += getSquaresAttackedByPiece(fen, p.square, p.type, turn).length; } score += Math.min(totalMoves / 5, 20); return Math.min(100, Math.round(score)); },
 
-            VOLATILITY_BLOCK: 95,
-            EXPLOSION_BLOCK: 80,
-            RISK_CRITICAL: 1000,
+        _calculatePvConsensus(fen, ourUci, ourColor) { const result = { consensus: 0, bonus: 0, totalLines: 0, agreedLines: 0 }; const fenHash = hashFen(fen); const bucket = (Engine && Engine._premoveCandidates) ? Engine._premoveCandidates[fenHash] : null; if (!Array.isArray(bucket) || bucket.length < 2) return result; result.totalLines = bucket.length; for (const c of bucket) { if (!c.pvMoves || c.pvMoves.length < 2) continue; if (c.pvMoves[1] === ourUci) result.agreedLines++; } result.consensus = result.totalLines > 0 ? result.agreedLines / result.totalLines : 0; if (result.consensus >= 1.0) result.bonus = this.HEURISTICS.PV_CONSENSUS_MAX; else if (result.consensus >= 0.8) result.bonus = Math.round(this.HEURISTICS.PV_CONSENSUS_MAX * 0.6); else if (result.consensus >= 0.5) result.bonus = Math.round(this.HEURISTICS.PV_CONSENSUS_MAX * 0.27); return result; },
 
-            DELAY_RECAPTURE: 0.35,
-            DELAY_FORCED: 0.5,
-            DELAY_CONVERGED: 0.7,
-            DELAY_SACRIFICE: 2.2,
-            DELAY_VOLATILE: 1.6,
-            DELAY_BOOK_TB: 0.35,
-            DELAY_MIN_MS: 150,
-            DELAY_MAX_MS: 2000,
+        _opponentReplyExpectedScore(fen, ourUci, ourColor, pvMoves) { const result = { expectedScore: 0, worstScore: 999, bestScore: -999, replies: 0 }; const oppColor = ourColor === "w" ? "b" : "w"; const oppCandidates = []; const fenHash = hashFen(fen); const bucket = (Engine && Engine._premoveCandidates) ? Engine._premoveCandidates[fenHash] : null; if (Array.isArray(bucket)) { for (const c of bucket) { if (c.pvMoves && c.pvMoves[0] && c.pvMoves[0].length >= 4) oppCandidates.push({ move: c.pvMoves[0], weight: 1 }); } } if (pvMoves && pvMoves[0] && pvMoves[0].length >= 4 && !oppCandidates.some(c => c.move === pvMoves[0])) oppCandidates.push({ move: pvMoves[0], weight: 2 }); if (oppCandidates.length === 0) return result; const totalWeight = oppCandidates.reduce((s, c) => s + c.weight, 0); const ourFrom = ourUci.substring(0, 2), ourTo = ourUci.substring(2, 4), ourPromo = ourUci.length > 4 ? ourUci[4] : null; for (const cand of oppCandidates) { const predFen = makeSimpleMove(fen, cand.move.substring(0, 2), cand.move.substring(2, 4)); if (!predFen) continue; const piece = pieceFromFenChar(fenCharAtSquare(predFen, ourFrom)); if (!piece || piece.color !== ourColor) { result.worstScore = -999; continue; } const afterFen = makeSimpleMove(predFen, ourFrom, ourTo, ourPromo); if (!afterFen) { result.worstScore = -999; continue; } const king = findKing(afterFen, ourColor); if (king && isSquareAttackedBy(afterFen, king, oppColor)) { result.worstScore = -999; continue; } const atk = getAttackersOfSquare(afterFen, ourTo, oppColor); const def = getAttackersOfSquare(afterFen, ourTo, ourColor); const pVal = PIECE_VALUES[piece.type] || 0; let replyScore = 0; if (atk.length > 0 && def.length === 0) replyScore = -pVal * 3; else if (atk.length > def.length) replyScore = -pVal; else replyScore = 1; const prob = cand.weight / totalWeight; result.expectedScore += prob * replyScore; if (replyScore < result.worstScore) result.worstScore = replyScore; if (replyScore > result.bestScore) result.bestScore = replyScore; result.replies++; } return result; },
 
-            TC_BULLET_BOOST: 30,
-            TC_BLITZ_BOOST: 15,
-            TC_CLASSICAL_PENALTY: -10,
-        },
+        _detectTacticalExplosion(fen, ourColor) { const result = { explosion: false, severity: 0, reasons: [] }; const oppColor = ourColor === "w" ? "b" : "w"; let severity = 0; const ourKing = findKing(fen, ourColor); if (ourKing && isSquareAttackedBy(fen, ourKing, oppColor)) { severity += 60; result.reasons.push("Our king in check"); } const oppKing = findKing(fen, oppColor); if (oppKing && isSquareAttackedBy(fen, oppKing, ourColor)) { severity += 30; result.reasons.push("We give check"); } const ourPieces = getAllPieces(fen, ourColor); let hangingVal = 0; for (const p of ourPieces) { if (p.type === "k") continue; const atk = getAttackersOfSquare(fen, p.square, oppColor).length; const def = getAttackersOfSquare(fen, p.square, ourColor).length; if (atk > 0 && def === 0) hangingVal += PIECE_VALUES[p.type] || 0; } if (hangingVal >= 9) { severity += 40; result.reasons.push("Queen/rook hanging"); } else if (hangingVal >= 5) { severity += 20; result.reasons.push("Major piece hanging"); } if (ThreatDetectionSystem && ThreatDetectionSystem.detectOpponentForks) { const forks = ThreatDetectionSystem.detectOpponentForks(fen, ourColor); if (Array.isArray(forks) && forks.length > 0) { severity += 25; result.reasons.push("Fork threat detected"); } } result.severity = Math.min(100, severity); result.explosion = severity >= 40; return result; },
 
-        _calculatePositionVolatility(fen) {
-            let score = 0;
-            const parts = fen.split(" ");
-            const placement = parts[0];
-            const turn = parts[1] || "w";
-            const oppColor = turn === "w" ? "b" : "w";
+        _getContextualPremoveDelay(decision) { let base = State.premoveDelayMs || 250; if (decision.recapture && decision.recapture.isRecapture) base = Math.round(base * this.HEURISTICS.DELAY_RECAPTURE); else if (decision.forced && decision.forced.isForced) base = Math.round(base * this.HEURISTICS.DELAY_FORCED); else if (decision.convergence && decision.convergence.converged) base = Math.round(base * this.HEURISTICS.DELAY_CONVERGED); if (decision.sacrifice && decision.sacrifice.isSacrifice) base = Math.round(base * this.HEURISTICS.DELAY_SACRIFICE); if (decision.volatility && decision.volatility > 60) base = Math.round(base * this.HEURISTICS.DELAY_VOLATILE); if (decision.timePressure && decision.timePressure.speedMultiplier < 1) base = Math.round(base * decision.timePressure.speedMultiplier); if (decision.isBook || decision.isTB) base = Math.round(base * this.HEURISTICS.DELAY_BOOK_TB); return this._humanDelay(Math.max(60, Math.min(2000, base))); },
 
-            const pieceMatch = placement.match(/[pnbrqkPNBRQK]/g);
-            const pieceCount = pieceMatch ? pieceMatch.length : 0;
-            score += pieceCount * 3;
+        _getTimeControlProfile() { const clock = getClockTimes(); if (!clock.found || clock.playerTime === null) return { profile: "rapid", aggressionMultiplier: 1.0, confidenceBoost: 0 }; const initialEstimate = clock.playerTime + (State.moveNumber || 1) * 5; if (initialEstimate <= 180) return { profile: "bullet", aggressionMultiplier: 2.2, confidenceBoost: this.HEURISTICS.TC_BULLET_BOOST }; else if (initialEstimate <= 600) return { profile: "blitz", aggressionMultiplier: 1.5, confidenceBoost: this.HEURISTICS.TC_BLITZ_BOOST }; else if (initialEstimate <= 1800) return { profile: "rapid", aggressionMultiplier: 1.0, confidenceBoost: 0 }; else return { profile: "classical", aggressionMultiplier: 0.6, confidenceBoost: this.HEURISTICS.TC_CLASSICAL_PENALTY }; },
 
-            const ourKing = findKing(fen, turn);
-            if (ourKing && isSquareAttackedBy(fen, ourKing, oppColor)) {
-                score += 40;
-            }
-            const oppKing = findKing(fen, oppColor);
-            if (oppKing && isSquareAttackedBy(fen, oppKing, turn)) {
-                score += 25;
-            }
-
-            const ourPieces = getAllPieces(fen, turn);
-            let hangingCount = 0;
-            for (const p of ourPieces) {
-                if (p.type === "k") continue;
-                const atk = getAttackersOfSquare(fen, p.square, oppColor).length;
-                const def = getAttackersOfSquare(fen, p.square, turn).length;
-                if (atk > 0 && def === 0) hangingCount += PIECE_VALUES[p.type] || 0;
-            }
-            score += hangingCount * 10;
-
-            let captureOpportunities = 0;
-            for (const p of ourPieces) {
-                const sqs = getSquaresAttackedByPiece(fen, p.square, p.type, turn);
-                for (const s of sqs) {
-                    const target = pieceFromFenChar(fenCharAtSquare(fen, s));
-                    if (target && target.color === oppColor) captureOpportunities++;
-                }
-            }
-            score += Math.min(captureOpportunities, 10) * 2;
-
-            let totalMoves = 0;
-            for (const p of ourPieces) {
-                totalMoves += getSquaresAttackedByPiece(fen, p.square, p.type, turn).length;
-            }
-            score += Math.min(totalMoves / 5, 20);
-
-            return Math.min(100, Math.round(score));
-        },
-
-        _calculatePvConsensus(fen, ourUci, ourColor) {
-            const result = { consensus: 0, bonus: 0, totalLines: 0, agreedLines: 0 };
-            const fenHash = hashFen(fen);
-            const bucket = (Engine && Engine._premoveCandidates) ? Engine._premoveCandidates[fenHash] : null;
-            if (!Array.isArray(bucket) || bucket.length < 2) return result;
-
-            result.totalLines = bucket.length;
-            for (const c of bucket) {
-                if (!c.pvMoves || c.pvMoves.length < 2) continue;
-                const ourMove = c.pvMoves[1];
-                if (ourMove === ourUci) result.agreedLines++;
-            }
-            result.consensus = result.totalLines > 0 ? result.agreedLines / result.totalLines : 0;
-
-            if (result.consensus >= 1.0) result.bonus = this.HEURISTICS.PV_CONSENSUS_MAX;
-            else if (result.consensus >= 0.8) result.bonus = Math.round(this.HEURISTICS.PV_CONSENSUS_MAX * 0.6);
-            else if (result.consensus >= 0.5) result.bonus = Math.round(this.HEURISTICS.PV_CONSENSUS_MAX * 0.27);
-            return result;
-        },
-
-        _opponentReplyExpectedScore(fen, ourUci, ourColor, pvMoves) {
-            const result = { expectedScore: 0, worstScore: 999, bestScore: -999, replies: 0 };
-            const oppColor = ourColor === "w" ? "b" : "w";
-            const oppCandidates = [];
-
-            const fenHash = hashFen(fen);
-            const bucket = (Engine && Engine._premoveCandidates) ? Engine._premoveCandidates[fenHash] : null;
-            if (Array.isArray(bucket)) {
-                for (const c of bucket) {
-                    if (c.pvMoves && c.pvMoves[0] && c.pvMoves[0].length >= 4) {
-                        oppCandidates.push({ move: c.pvMoves[0], weight: 1 });
-                    }
-                }
-            }
-            if (pvMoves && pvMoves[0] && pvMoves[0].length >= 4) {
-                const exists = oppCandidates.some(c => c.move === pvMoves[0]);
-                if (!exists) oppCandidates.push({ move: pvMoves[0], weight: 2 });
-            }
-            if (oppCandidates.length === 0) return result;
-
-            const totalWeight = oppCandidates.reduce((s, c) => s + c.weight, 0);
-
-            const ourFrom = ourUci.substring(0, 2);
-            const ourTo = ourUci.substring(2, 4);
-            const ourPromo = ourUci.length > 4 ? ourUci[4] : null;
-
-            for (const cand of oppCandidates) {
-                const oppFrom = cand.move.substring(0, 2);
-                const oppTo = cand.move.substring(2, 4);
-                const predFen = makeSimpleMove(fen, oppFrom, oppTo);
-                if (!predFen) continue;
-
-                const piece = pieceFromFenChar(fenCharAtSquare(predFen, ourFrom));
-                if (!piece || piece.color !== ourColor) { result.worstScore = -999; continue; }
-
-                const afterFen = makeSimpleMove(predFen, ourFrom, ourTo, ourPromo);
-                if (!afterFen) { result.worstScore = -999; continue; }
-
-                const king = findKing(afterFen, ourColor);
-                if (king && isSquareAttackedBy(afterFen, king, oppColor)) { result.worstScore = -999; continue; }
-
-                const atk = getAttackersOfSquare(afterFen, ourTo, oppColor);
-                const def = getAttackersOfSquare(afterFen, ourTo, ourColor);
-                const pVal = PIECE_VALUES[piece.type] || 0;
-                let replyScore = 0;
-                if (atk.length > 0 && def.length === 0) replyScore = -pVal * 3;
-                else if (atk.length > def.length) replyScore = -pVal;
-                else replyScore = 1;
-
-                const prob = cand.weight / totalWeight;
-                result.expectedScore += prob * replyScore;
-                if (replyScore < result.worstScore) result.worstScore = replyScore;
-                if (replyScore > result.bestScore) result.bestScore = replyScore;
-                result.replies++;
-            }
-
-            return result;
-        },
-
-        _detectTacticalExplosion(fen, ourColor) {
-            const result = { explosion: false, severity: 0, reasons: [] };
-            const oppColor = ourColor === "w" ? "b" : "w";
-            let severity = 0;
-
-            const ourKing = findKing(fen, ourColor);
-            if (ourKing && isSquareAttackedBy(fen, ourKing, oppColor)) {
-                severity += 60;
-                result.reasons.push("Our king in check");
-            }
-
-            const oppKing = findKing(fen, oppColor);
-            if (oppKing && isSquareAttackedBy(fen, oppKing, ourColor)) {
-                severity += 30;
-                result.reasons.push("We give check");
-            }
-
-            const ourPieces = getAllPieces(fen, ourColor);
-            let hangingVal = 0;
-            for (const p of ourPieces) {
-                if (p.type === "k") continue;
-                const atk = getAttackersOfSquare(fen, p.square, oppColor).length;
-                const def = getAttackersOfSquare(fen, p.square, ourColor).length;
-                if (atk > 0 && def === 0) hangingVal += PIECE_VALUES[p.type] || 0;
-            }
-            if (hangingVal >= 9) { severity += 40; result.reasons.push("Queen/rook hanging"); }
-            else if (hangingVal >= 5) { severity += 20; result.reasons.push("Major piece hanging"); }
-
-            if (ThreatDetectionSystem && ThreatDetectionSystem.detectOpponentForks) {
-                const forks = ThreatDetectionSystem.detectOpponentForks(fen, ourColor);
-                if (Array.isArray(forks) && forks.length > 0) {
-                    severity += 25;
-                    result.reasons.push("Fork threat detected");
-                }
-            }
-
-            result.severity = Math.min(100, severity);
-            result.explosion = severity >= 40;
-            return result;
-        },
-
-        _getContextualPremoveDelay(decision) {
-            let base = State.premoveDelayMs || 250;
-
-            if (decision.recapture && decision.recapture.isRecapture) {
-                base = Math.round(base * this.HEURISTICS.DELAY_RECAPTURE);
-            }
-            else if (decision.forced && decision.forced.isForced) {
-                base = Math.round(base * this.HEURISTICS.DELAY_FORCED);
-            }
-            else if (decision.convergence && decision.convergence.converged) {
-                base = Math.round(base * this.HEURISTICS.DELAY_CONVERGED);
-            }
-            if (decision.sacrifice && decision.sacrifice.isSacrifice) {
-                base = Math.round(base * this.HEURISTICS.DELAY_SACRIFICE);
-            }
-            if (decision.volatility && decision.volatility > 60) {
-                base = Math.round(base * this.HEURISTICS.DELAY_VOLATILE);
-            }
-            if (decision.timePressure && decision.timePressure.speedMultiplier < 1) {
-                base = Math.round(base * decision.timePressure.speedMultiplier);
-            }
-            if (decision.isBook || decision.isTB) {
-                base = Math.round(base * this.HEURISTICS.DELAY_BOOK_TB);
-            }
-
-            return this._humanDelay(Math.max(60, Math.min(2000, base)));
-        },
-
-        _getTimeControlProfile() {
-            const clock = getClockTimes();
-            if (!clock.found || clock.playerTime === null) {
-                return { profile: "rapid", aggressionMultiplier: 1.0, confidenceBoost: 0 };
-            }
-
-            const initialEstimate = clock.playerTime + (State.moveNumber || 1) * 5;
-
-            if (initialEstimate <= 180) return { profile: "bullet", aggressionMultiplier: 2.2, confidenceBoost: this.HEURISTICS.TC_BULLET_BOOST };
-            else if (initialEstimate <= 600) return { profile: "blitz", aggressionMultiplier: 1.5, confidenceBoost: this.HEURISTICS.TC_BLITZ_BOOST };
-            else if (initialEstimate <= 1800) return { profile: "rapid", aggressionMultiplier: 1.0, confidenceBoost: 0 };
-            else return { profile: "classical", aggressionMultiplier: 0.6, confidenceBoost: this.HEURISTICS.TC_CLASSICAL_PENALTY };
-        },
-
-        _validatePreExecution(fenHash, uci, ourColor, isPremove) {
-            const currentFen = getAccurateFen();
-            if (!currentFen) return { ok: false, reason: "Cannot read board" };
-
-            const from = uci.substring(0, 2);
-            const piece = pieceFromFenChar(fenCharAtSquare(currentFen, from));
-            if (!piece || piece.color !== ourColor) {
-                return { ok: false, reason: "Piece missing from origin" };
-            }
-
-            const turn = getCurrentTurn(currentFen);
-            if (isPremove) {
-                if (turn !== ourColor) {
-                }
-            } else {
-                if (turn !== ourColor) {
-                    return { ok: false, reason: "Not our turn" };
-                }
-            }
-
-            if (isPremove) {
-                const currentHash = hashFen(currentFen);
-                if (currentHash === fenHash) {
-                } else {
-                    log("[SmartPremove] Opponent already moved!");
-                }
-            }
-
-            if (!isPremove) {
-                const to = uci.substring(2, 4);
-                const promo = uci.length > 4 ? uci[4] : null;
-                const afterFen = makeSimpleMove(currentFen, from, to, promo);
-                if (!afterFen || afterFen === currentFen) return { ok: false, reason: "Move illegal" };
-
-                const oppColor = ourColor === "w" ? "b" : "w";
-                const king = findKing(afterFen, ourColor);
-                if (king && isSquareAttackedBy(afterFen, king, oppColor)) {
-                    return { ok: false, reason: "Move exposes king" };
-                }
-            }
-
-            const board = getBoardElement();
-            if (board) {
-                if (board.classList.contains("animating") || board.classList.contains("dragging")) {
-                    return { ok: false, reason: "Board is animating/dragging" };
-                }
-            }
-
-            return { ok: true };
-        },
+        _validatePreExecution(fenHash, uci, ourColor, isPremove) { const currentFen = getAccurateFen(); if (!currentFen) return { ok: false, reason: "Cannot read board" }; const from = uci.substring(0, 2); const piece = pieceFromFenChar(fenCharAtSquare(currentFen, from)); if (!piece || piece.color !== ourColor) return { ok: false, reason: "Piece missing from origin" }; const turn = getCurrentTurn(currentFen); if (!isPremove && turn !== ourColor) return { ok: false, reason: "Not our turn" }; if (!isPremove) { const to = uci.substring(2, 4), promo = uci.length > 4 ? uci[4] : null; const afterFen = makeSimpleMove(currentFen, from, to, promo); if (!afterFen || afterFen === currentFen) return { ok: false, reason: "Move illegal" }; const oppColor = ourColor === "w" ? "b" : "w"; const king = findKing(afterFen, ourColor); if (king && isSquareAttackedBy(afterFen, king, oppColor)) return { ok: false, reason: "Move exposes king" }; } const board = getBoardElement(); if (board && (board.classList.contains("animating") || board.classList.contains("dragging"))) return { ok: false, reason: "Board is animating/dragging" }; return { ok: true }; },
 
         shouldPremove(fen, uci, pvMoves, scoreInfo) {
-
-            if (this.executionLock || this.processingLock) {
-                return { allowed: false, reason: "System locked" };
-            }
-            if (this.isInErrorCooldown()) {
-                return { allowed: false, reason: "Error cooldown active" };
-            }
-
+            if (this.executionLock || this.processingLock) return { allowed: false, reason: "System locked" };
+            if (this.isInErrorCooldown()) return { allowed: false, reason: "Error cooldown active" };
             const ourColor = getPlayingAs();
-            if (!ourColor) {
-                return { allowed: false, reason: "Unknown color" };
-            }
-
+            if (!ourColor) return { allowed: false, reason: "Unknown color" };
             const predictedFen = getPredictedFen(fen, pvMoves);
-            if (predictedFen) {
-                const bookMove = this._checkBookPremove(predictedFen, ourColor);
-                if (bookMove === uci) {
-                    log("[SmartPremove] Book move detected for predicted position: " + uci);
-                    return { allowed: true, confidence: 95, reason: "Theory/Book", isBook: true };
-                }
-                const tbMove = this._checkEndgamePremove(predictedFen);
-                if (tbMove === uci) {
-                    log("[SmartPremove] Tablebase move detected for predicted position: " + uci);
-                    return { allowed: true, confidence: 100, reason: "Tablebase (Win/Draw)", isTB: true };
-                }
-            }
-
-            if (!predictedFen || predictedFen === fen) {
-                return { allowed: false, reason: "Cannot predict position after opponent move" };
-            }
-
+            if (predictedFen) { const bookMove = this._checkBookPremove(predictedFen, ourColor); if (bookMove === uci) return { allowed: true, confidence: 95, reason: "Theory/Book", isBook: true }; const tbMove = this._checkEndgamePremove(predictedFen); if (tbMove === uci) return { allowed: true, confidence: 100, reason: "Tablebase (Win/Draw)", isTB: true }; }
+            if (!predictedFen || predictedFen === fen) return { allowed: false, reason: "Cannot predict position after opponent move" };
             const fenHash = hashFen(predictedFen);
-            if (this.executedFens.has(fenHash)) {
-                return { allowed: false, reason: "Position already executed" };
-            }
-
-            const from = uci.substring(0, 2);
-            const to = uci.substring(2, 4);
+            if (this.executedFens.has(fenHash)) return { allowed: false, reason: "Position already executed" };
+            const from = uci.substring(0, 2), to = uci.substring(2, 4);
             const movingPiece = pieceFromFenChar(fenCharAtSquare(predictedFen, from));
-            if (!movingPiece || movingPiece.color !== ourColor) {
-                return { allowed: false, reason: "Move invalid in predicted position" };
-            }
-
+            if (!movingPiece || movingPiece.color !== ourColor) return { allowed: false, reason: "Move invalid in predicted position" };
             const config = this.AGGRESSION_CONFIG[State.premoveMode] || this.AGGRESSION_CONFIG.filter;
             const mode = State.premoveMode || "filter";
-            const isEveryMode = mode === "every";
-            const isCaptureMode = mode === "capture";
-            const isFilteredMode = mode === "filter";
-
+            const isEveryMode = mode === "every", isCaptureMode = mode === "capture", isFilteredMode = mode === "filter";
             const recapture = this._analyzeRecapture(predictedFen, uci, ourColor, pvMoves);
             const forced = this._detectForcedResponse(fen, ourColor);
             const convergence = this._multiPvConvergenceCheck(fen, uci, pvMoves, ourColor);
@@ -3024,327 +2146,80 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
             const replyTree = this._opponentReplyExpectedScore(fen, uci, ourColor, pvMoves);
             const tacticalExplosion = this._detectTacticalExplosion(fen, ourColor);
             const tcProfile = this._getTimeControlProfile();
-
-            if (isCaptureMode) {
-                if (!this._isCaptureMove(predictedFen, uci, ourColor)) {
-                    return { allowed: false, reason: "Capture mode: bukan capture" };
-                }
-
-                const captureCheck = this._validateCaptureQuality(predictedFen, uci, ourColor, config);
-                if (!captureCheck.ok) {
-                    return { allowed: false, reason: "Capture mode: " + captureCheck.reason };
-                }
-            }
-
-            if (isEveryMode && config.allowSpeculative && scoreInfo && scoreInfo.type === "cp") {
-                const evalForUs = -(scoreInfo.value || 0);
-                const minEval = config.minEvalForSpeculative || -200;
-                if (evalForUs < minEval) {
-                    return {
-                        allowed: false,
-                        reason: `Every mode: eval terlalu negatif (${evalForUs}cp < ${minEval}cp)`
-                    };
-                }
-            }
-
+            if (isCaptureMode) { if (!this._isCaptureMove(predictedFen, uci, ourColor)) return { allowed: false, reason: "Capture mode: bukan capture" }; const captureCheck = this._validateCaptureQuality(predictedFen, uci, ourColor, config); if (!captureCheck.ok) return { allowed: false, reason: "Capture mode: " + captureCheck.reason }; }
+            if (isEveryMode && config.allowSpeculative && scoreInfo && scoreInfo.type === "cp") { const evalForUs = -(scoreInfo.value || 0); if (evalForUs < (config.minEvalForSpeculative || -200)) return { allowed: false, reason: `Every mode: eval terlalu negatif (${evalForUs}cp)` }; }
             const tactical = this.analyzeTacticalMotifs(predictedFen, uci, ourColor);
-
-            if (tactical.isBlunder) {
-                this.recordBlunder(predictedFen);
-                return {
-                    allowed: false,
-                    reason: "Blunder terdeteksi: " + tactical.details.join("; "),
-                    tactical
-                };
-            }
-
-            if (isFilteredMode && config.requireMoveQuality) {
-                const moveCheck = this._validateMoveQuality(predictedFen, uci, ourColor, tactical, config);
-                if (!moveCheck.ok) {
-                    return { allowed: false, reason: "Filter mode: " + moveCheck.reason };
-                }
-            }
-
+            if (tactical.isBlunder) { this.recordBlunder(predictedFen); return { allowed: false, reason: "Blunder terdeteksi: " + tactical.details.join("; "), tactical }; }
+            if (isFilteredMode && config.requireMoveQuality) { const moveCheck = this._validateMoveQuality(predictedFen, uci, ourColor, tactical, config); if (!moveCheck.ok) return { allowed: false, reason: "Filter mode: " + moveCheck.reason }; }
             const safety = this.analyzeSafety(predictedFen, uci, ourColor, config);
-
-            if (safety.riskScore >= 1000) {
-                return {
-                    allowed: false,
-                    reason: "Safety critical: " + (safety.warnings[0] || "King exposed"),
-                    safety
-                };
-            }
-
-            if (safety.riskScore >= (config.maxRiskScore || 200)) {
-                return {
-                    allowed: false,
-                    reason: `Risk ${Math.round(safety.riskScore)} >= cap ${config.maxRiskScore}`,
-                    safety
-                };
-            }
-
+            if (safety.riskScore >= 1000) return { allowed: false, reason: "Safety critical: " + (safety.warnings[0] || "King exposed"), safety };
+            if (safety.riskScore >= (config.maxRiskScore || 200)) return { allowed: false, reason: `Risk ${Math.round(safety.riskScore)} >= cap ${config.maxRiskScore}`, safety };
             const riskBoost = isEveryMode ? 1.4 : (isCaptureMode ? 0.7 : 1.0);
             const riskThreshold = config.riskTolerance * this.RISK_MULTIPLIERS.BLOCK_THRESHOLD * riskBoost;
-
-            if (!safety.safe && safety.riskScore > riskThreshold) {
-                return {
-                    allowed: false,
-                    reason: `Terlalu berisiko: ${Math.round(safety.riskScore)} > ${Math.round(riskThreshold)}`,
-                    safety
-                };
-            }
-
-            if (isCaptureMode && (!safety.safe || safety.riskScore > (config.maxRiskScore || 100))) {
-                return {
-                    allowed: false,
-                    reason: "Capture mode: capture tidak aman",
-                    riskScore: safety.riskScore
-                };
-            }
-
+            if (!safety.safe && safety.riskScore > riskThreshold) return { allowed: false, reason: `Terlalu berisiko: ${Math.round(safety.riskScore)} > ${Math.round(riskThreshold)}`, safety };
+            if (isCaptureMode && (!safety.safe || safety.riskScore > (config.maxRiskScore || 100))) return { allowed: false, reason: "Capture mode: capture tidak aman", riskScore: safety.riskScore };
             let confidence = this.calculateConfidence(scoreInfo, tactical, safety, config);
-
             if (recapture.isRecapture) confidence += recapture.bonus;
             if (forced.isForced) confidence += forced.bonus;
-            confidence += convergence.bonus;
-            confidence += timePressure.bonus;
+            confidence += convergence.bonus; confidence += timePressure.bonus;
             if (sacrifice.isSacrifice) confidence -= sacrifice.penalty;
-
-            confidence += pvConsensus.bonus;
-            confidence += tcProfile.confidenceBoost;
+            confidence += pvConsensus.bonus; confidence += tcProfile.confidenceBoost;
             if (tacticalExplosion.explosion) confidence -= Math.min(tacticalExplosion.severity / 5, 10);
             if (volatility > 80) confidence -= 5;
             if (replyTree.replies > 0 && replyTree.worstScore < -5) confidence -= 3;
-
-            if (isEveryMode) {
-                const safetyRatio = Math.max(0, 1 - (safety.riskScore / (config.maxRiskScore || 220)));
-                const boost = Math.round((config.maxConfidenceBoost || 8) * safetyRatio);
-                confidence = Math.min(95, confidence + boost);
-            }
-
-            if (isCaptureMode) {
-                confidence = Math.max(5, confidence - 3);
-                if (tactical.score >= 3) confidence = Math.min(95, confidence + 5);
-            }
-
-            if (isFilteredMode && tactical.isBrilliant) {
-                confidence = Math.min(90, confidence + 8);
-            }
-
-            if (this.isInCautiousMode()) {
-                confidence = Math.max(config.minConfidence, confidence - 20);
-            }
-
-            const effectiveMin = this.isInCautiousMode()
-            ? Math.min(60, config.minConfidence + 20)
-            : config.minConfidence;
-
-            if (confidence < effectiveMin) {
-                return {
-                    allowed: false,
-                    reason: `Confidence kurang: ${confidence} < ${effectiveMin}`,
-                    confidence,
-                    required: effectiveMin
-                };
-            }
-
+            if (isEveryMode) { const safetyRatio = Math.max(0, 1 - (safety.riskScore / (config.maxRiskScore || 220))); confidence = Math.min(95, confidence + Math.round((config.maxConfidenceBoost || 8) * safetyRatio)); }
+            if (isCaptureMode) { confidence = Math.max(5, confidence - 3); if (tactical.score >= 3) confidence = Math.min(95, confidence + 5); }
+            if (isFilteredMode && tactical.isBrilliant) confidence = Math.min(90, confidence + 8);
+            if (this.isInCautiousMode()) confidence = Math.max(config.minConfidence, confidence - 20);
+            const effectiveMin = this.isInCautiousMode() ? Math.min(60, config.minConfidence + 20) : config.minConfidence;
+            if (confidence < effectiveMin) return { allowed: false, reason: `Confidence kurang: ${confidence} < ${effectiveMin}`, confidence, required: effectiveMin };
             const pattern = this.detectPattern();
-            if (pattern && pattern.isTooConsistent && !isEveryMode) {
-                const threshold = 68 + Math.random() * 22;
-                if (confidence < threshold && !tactical.isBrilliant) {
-                    this.patternBreakCounter++;
-                    return {
-                        allowed: false,
-                        reason: "Pattern break (humanisasi)",
-                        pattern
-                    };
-                }
-            }
-
-            if (!tactical.isBrilliant) {
-                const roll = Math.random() * 100;
-
-                const rollBuffer = isEveryMode
-                ? (config.rollBuffer || 12)
-                : isCaptureMode
-                ? (config.rollBuffer || -5)
-                : (config.rollBuffer || 0);
-
-                if (roll > confidence + rollBuffer) {
-                    return {
-                        allowed: false,
-                        reason: `Roll gagal (roll: ${Math.round(roll)}, need: ${Math.round(confidence + rollBuffer)})`,
-                        confidence,
-                        roll: Math.round(roll)
-                    };
-                }
-            }
-
+            if (pattern && pattern.isTooConsistent && !isEveryMode) { const threshold = 68 + Math.random() * 22; if (confidence < threshold && !tactical.isBrilliant) { this.patternBreakCounter++; return { allowed: false, reason: "Pattern break (humanisasi)", pattern }; } }
+            if (!tactical.isBrilliant) { const roll = Math.random() * 100; const rollBuffer = config.rollBuffer || 0; if (roll > confidence + rollBuffer) return { allowed: false, reason: `Roll gagal (roll: ${Math.round(roll)}, need: ${Math.round(confidence + rollBuffer)})`, confidence, roll: Math.round(roll) }; }
             const promo = uci.length > 4 ? uci[4] : null;
             const verifyFen = makeSimpleMove(predictedFen, from, to, promo);
-            if (verifyFen) {
-                const oppColor = ourColor === "w" ? "b" : "w";
-                const verifyKing = findKing(verifyFen, ourColor);
-                if (verifyKing && isSquareAttackedBy(verifyFen, verifyKing, oppColor)) {
-                    return {
-                        allowed: false,
-                        reason: "Final gate: move meninggalkan raja dalam check"
-                    };
-                }
-            }
-
-            return {
-                allowed: true,
-                confidence,
-                tactical,
-                safety,
-                pattern,
-                mode,
-                recapture,
-                forced,
-                convergence,
-                timePressure,
-                sacrifice,
-                volatility,
-                pvConsensus,
-                replyTree,
-                tacticalExplosion,
-                tcProfile
-            };
+            if (verifyFen) { const oppColor = ourColor === "w" ? "b" : "w"; const verifyKing = findKing(verifyFen, ourColor); if (verifyKing && isSquareAttackedBy(verifyFen, verifyKing, oppColor)) return { allowed: false, reason: "Final gate: move meninggalkan raja dalam check" }; }
+            return { allowed: true, confidence, tactical, safety, pattern, mode, recapture, forced, convergence, timePressure, sacrifice, volatility, pvConsensus, replyTree, tacticalExplosion, tcProfile };
         },
 
         async execute(fen, uci, decision) {
             if (!decision || !decision.allowed) return false;
-
             const now = Date.now();
             if (now - this.lastExecutionTime < this.MIN_EXECUTION_INTERVAL) return false;
             if (this.executionLock) return false;
-
             const execToken = this._newToken();
-
-            this.executionLock = true;
-            this.processingLock = true;
-
+            this.executionLock = true; this.processingLock = true;
             try {
                 const fenHash = hashFen(fen);
                 if (this.executedFens.has(fenHash)) return false;
-
                 this.executedFens.add(fenHash);
-
-                if (this.executedFens.size > this.MAX_EXECUTED_FENS) {
-                    const arr = [...this.executedFens];
-                    const keepCount = Math.floor(this.MAX_EXECUTED_FENS * 0.7);
-                    this.executedFens = new Set(arr.slice(-keepCount));
-                }
-
+                if (this.executedFens.size > this.MAX_EXECUTED_FENS) { const arr = [...this.executedFens]; this.executedFens = new Set(arr.slice(-Math.floor(this.MAX_EXECUTED_FENS * 0.7))); }
                 const delay = this._getContextualPremoveDelay(decision);
                 await sleep(delay);
-
-                if (!this._isCurrentToken(execToken)) {
-                    log("[SmartPremove] Token expired, aborting execution");
-                    this.executedFens.delete(fenHash);
-                    return false;
-                }
-
+                if (!this._isCurrentToken(execToken)) { this.executedFens.delete(fenHash); return false; }
                 const currentFen = getAccurateFen();
-                if (currentFen) {
-                    const currentHash = hashFen(currentFen);
-                    if (currentHash !== fenHash &&
-                        normalizeFen(currentFen) !== normalizeFen(fen)) {
-                        log("[SmartPremove] Aborted: position changed during delay");
-                        this.executedFens.delete(fenHash);
-                        return false;
-                    }
-                }
-
-                const from = uci.slice(0, 2);
-                const to = uci.slice(2, 4);
-                const promotion = uci.length > 4 ? uci.slice(4) : null;
-
+                if (currentFen) { const currentHash = hashFen(currentFen); if (currentHash !== fenHash && normalizeFen(currentFen) !== normalizeFen(fen)) { this.executedFens.delete(fenHash); return false; } }
+                const from = uci.slice(0, 2), to = uci.slice(2, 4), promotion = uci.length > 4 ? uci.slice(4) : null;
                 const ourColor = getPlayingAs();
-                if (!ourColor) {
-                    log("[SmartPremove] Cannot determine player color, aborting execution");
-                    this.executedFens.delete(fenHash);
-                    return false;
-                }
-
+                if (!ourColor) { this.executedFens.delete(fenHash); return false; }
                 const preExecCheck = this._validatePreExecution(fenHash, uci, ourColor, true);
-                if (!preExecCheck.ok) {
-                    log("[SmartPremove] Pre-execution rejected: " + preExecCheck.reason);
-                    this.executedFens.delete(fenHash);
-                    return false;
-                }
-
+                if (!preExecCheck.ok) { this.executedFens.delete(fenHash); return false; }
                 const ok = await MoveExecutor._clickMove(from, to, promotion, true);
-
                 if (ok === true) {
                     this.consecutiveErrors = 0;
-
-                    this.moveHistory.push({
-                        move: uci,
-                        timeSpent: delay,
-                        wasEngineMove: true,
-                        timestamp: Date.now(),
-                        confidence: decision.confidence,
-                        mode: decision.mode || State.premoveMode
-                    });
-
-                    if (this.moveHistory.length > this.MAX_HISTORY) {
-                        this.moveHistory = this.moveHistory.slice(-this.MAX_HISTORY);
-                    }
-
+                    this.moveHistory.push({ move: uci, timeSpent: delay, wasEngineMove: true, timestamp: Date.now(), confidence: decision.confidence, mode: decision.mode || State.premoveMode });
+                    if (this.moveHistory.length > this.MAX_HISTORY) this.moveHistory = this.moveHistory.slice(-this.MAX_HISTORY);
                     this.lastSafeMoves.push({ fen, uci, timestamp: Date.now() });
                     if (this.lastSafeMoves.length > 10) this.lastSafeMoves.shift();
-
-                } else {
-                    this.consecutiveErrors++;
-                    log("[SmartPremove] Move execution failed, errors: " + this.consecutiveErrors);
-                }
-
+                } else { this.consecutiveErrors++; }
                 return ok;
-
-            } catch (e) {
-                console.error("SmartPremove execution error:", e);
-                this.consecutiveErrors++;
-                return false;
-
-            } finally {
-                this.executionLock = false;
-                this.processingLock = false;
-                this.lastExecutionTime = Date.now();
-            }
+            } catch (e) { console.error("SmartPremove execution error:", e); this.consecutiveErrors++; return false; }
+            finally { this.executionLock = false; this.processingLock = false; this.lastExecutionTime = Date.now(); }
         },
 
-        _humanDelay(base) {
-            const u1 = Math.random();
-            const u2 = Math.random();
-            const normal = Math.sqrt(-2 * Math.log(Math.max(u1, 0.001))) * Math.cos(2 * Math.PI * u2);
+        _humanDelay(base) { const u1 = Math.random(), u2 = Math.random(); const normal = Math.sqrt(-2 * Math.log(Math.max(u1, 0.001))) * Math.cos(2 * Math.PI * u2); const delay = base + normal * (base * 0.25); const thinkPause = Math.random() < 0.1 ? (base * 0.5 + Math.random() * base) : 0; return Math.min(this.HEURISTICS.DELAY_MAX_MS, Math.max(this.HEURISTICS.DELAY_MIN_MS, delay + thinkPause)); },
 
-            const delay = base + normal * (base * 0.25);
-
-            const thinkPause = Math.random() < 0.1
-            ? (base * 0.5 + Math.random() * base)
-            : 0;
-
-            return Math.min(this.HEURISTICS.DELAY_MAX_MS, Math.max(this.HEURISTICS.DELAY_MIN_MS, delay + thinkPause));
-        },
-
-        getStats() {
-            const pattern = this.detectPattern();
-            return {
-                executedPositions: this.executedFens.size,
-                moveHistory: this.moveHistory.length,
-                consecutiveErrors: this.consecutiveErrors,
-                patternBreaks: this.patternBreakCounter,
-                blunderCount: this.blunderCount,
-                isLocked: this.executionLock || this.processingLock,
-                inCooldown: this.isInErrorCooldown(),
-                inCautiousMode: this.isInCautiousMode(),
-                pattern: pattern,
-                lastExecutionTime: this.lastExecutionTime,
-                recentMoves: this.moveHistory.slice(-5)
-            };
-        }
+        getStats() { const pattern = this.detectPattern(); return { executedPositions: this.executedFens.size, moveHistory: this.moveHistory.length, consecutiveErrors: this.consecutiveErrors, patternBreaks: this.patternBreakCounter, blunderCount: this.blunderCount, isLocked: this.executionLock || this.processingLock, inCooldown: this.isInErrorCooldown(), inCautiousMode: this.isInCautiousMode(), pattern, lastExecutionTime: this.lastExecutionTime, recentMoves: this.moveHistory.slice(-5) }; }
     };
 
     // =====================================================
@@ -3353,39 +2228,27 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     let _pendingEngineRunId = null;
     function runEngineNow() {
         let fen = getAccurateFen();
-        if (!fen) {
-            warn("Cannot get FEN");
-            return;
-        }
+        if (!fen) { warn("Cannot get FEN"); return; }
         State.isPremoveAnalysis = false;
-
-        if (_pendingEngineRunId) {
-            clearTimeout(_pendingEngineRunId);
-            _pendingEngineRunId = null;
-        }
-
-        if (State.isThinking) {
-            Engine.stop();
-            _pendingEngineRunId = scheduleManagedTimeout(function () { _doRun(fen); }, 100);
-        } else {
-            _doRun(fen);
-        }
+        if (_pendingEngineRunId) { clearTimeout(_pendingEngineRunId); _pendingEngineRunId = null; }
+        if (State.isThinking) { Engine.stop(); _pendingEngineRunId = scheduleManagedTimeout(function () { _doRun(fen); }, 100); }
+        else { _doRun(fen); }
     }
 
+    let _goLock = false;
     function _doRun(fen) {
-        if (State.useOpeningBook && State.evaluationMode === "engine") {
-            let history = getGameHistory();
-            let bookMove = OpeningBook.getMove(fen, history);
-            if (bookMove) {
-                State.isThinking = false;
-                State.statusInfo = "Book Move: " + bookMove;
-                UI.updateStatusInfo();
-                MoveExecutor.recordMove(bookMove);
-                if (State.autoMovePiece) executeAction(bookMove, fen);
-                return;
+        if (_goLock) return;
+        _goLock = true;
+        try {
+            if (State.useOpeningBook && State.evaluationMode === "engine") {
+                let history = getGameHistory();
+                let bookMove = OpeningBook.getMove(fen, history);
+                if (bookMove) { State.isThinking = false; State.statusInfo = "Book Move: " + bookMove; UI.updateStatusInfo(); MoveExecutor.recordMove(bookMove); if (State.autoMovePiece) executeAction(bookMove, fen); return; }
             }
+            Engine.go(fen, State.customDepth);
+        } finally {
+            scheduleManagedTimeout(function () { _goLock = false; }, 300);
         }
-        Engine.go(fen, State.customDepth);
     }
 
     function autoRunCheck() {
@@ -3408,15 +2271,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         let fenKey = hashFen(fen || getAccurateFen() || "");
         let recordKey = fenKey + "|" + move;
         if (State.analysisLastRecordedKey === recordKey) return;
-
-        MoveHistory.add(
-            move,
-            evalText || State.analysisEvalText || State.lastEvalText1 || "0.00",
-            depth || State._lastAnalysisDepth || State.customDepth,
-            "Analysis",
-            null,
-            sourceTag || "Analysis"
-        );
+        MoveHistory.add(move, evalText || State.analysisEvalText || State.lastEvalText1 || "0.00", depth || State._lastAnalysisDepth || State.customDepth, "Analysis", null, sourceTag || "Analysis");
         State.analysisLastRecordedKey = recordKey;
     }
 
@@ -3425,43 +2280,22 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         let fen = getAccurateFen();
         if (!fen) return;
         if (fen === State._lastAnalysisFen) return;
-
         syncAnalysisMoveHistory();
-
         UI.clearAll();
-        State.topMoves = [];
-        State.topMoveInfos = {};
+        State.topMoves = []; State.topMoveInfos = {};
         let maxRows = clamp(State.numberOfMovesToShow || 5, 2, 10);
-        for (let i = 1; i <= maxRows; i++) {
-            UI.updateMove(i, "...", "0.00", "eval-equal");
-        }
-        State._lastAnalysisFen = fen;
-        State.analysisPVTurn = getCurrentTurn(fen);
-        State.isAnalysisThinking = true;
-        State._lastAnalysisDepth = 0;
-        State._analysisDepthByPv = {};
-        State._lastAnalysisBestPV = [];
-        State._lastAnalysisBestMove = null;
-        State.analysisPVLine = [];
-        State.analysisStableCount = 0;
-        State.analysisLastBestMove = "";
-        State.analysisPrevEvalCp = null;
-        State.analysisLastEvalCp = null;
-        State._analysisAutoPlayApproved = false;
-        State._analysisAutoPlayMove = null;
-
+        for (let i = 1; i <= maxRows; i++) { UI.updateMove(i, "...", "0.00", "eval-equal"); }
+        State._lastAnalysisFen = fen; State.analysisPVTurn = getCurrentTurn(fen); State.isAnalysisThinking = true;
+        State._lastAnalysisDepth = 0; State._analysisDepthByPv = {}; State._lastAnalysisBestPV = []; State._lastAnalysisBestMove = null;
+        State.analysisPVLine = []; State.analysisStableCount = 0; State.analysisLastBestMove = "";
+        State.analysisPrevEvalCp = null; State.analysisLastEvalCp = null;
+        State._analysisAutoPlayApproved = false; State._analysisAutoPlayMove = null;
         Syzygy.maybeProbe(fen);
-        if (Syzygy.tryUseForAnalysis(fen)) {
-            return;
-        }
-
+        if (Syzygy.tryUseForAnalysis(fen)) return;
         Engine.analysis.postMessage("stop");
         Engine.analysis.postMessage("position fen " + fen);
         Engine.analysis.postMessage("go depth " + State.customDepth);
-
-        State.statusInfo = "Analyzing...";
-        UI.updateStatusInfo();
-        State.statusInfo = "Started analysis for FEN: " + fen.substring(0, 50) + "...";
+        State.statusInfo = "Analyzing..."; UI.updateStatusInfo();
     }
 
     // =====================================================
@@ -3469,62 +2303,24 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     // =====================================================
     function premoveCheck() {
         if (!State.premoveEnabled) return;
-
         let now = Date.now();
-        if (now - State.premoveLastAnalysisTime < State.premoveThrottleMs) {
-            return;
-        }
-
-        if (Engine._premoveEngineBusy) {
-            State.statusInfo = "[PremoveCheck] Engine busy, skipping";
-            return;
-        }
-
+        if (now - State.premoveLastAnalysisTime < State.premoveThrottleMs) return;
+        if (Engine._premoveEngineBusy) return;
         const fen = getAccurateFen();
         if (!fen) return;
-
         const fenHash = hashFen(fen);
-
-        if (State.premoveExecutedForFen === fenHash) {
-            State.statusInfo = "[PremoveCheck] Already executed for FEN";
-            return;
-        }
-
-        if (Engine._premoveProcessedFens.has(fenHash)) {
-            State.statusInfo = "[PremoveCheck] Already processed by engine";
-            return;
-        }
-
+        if (State.premoveExecutedForFen === fenHash) return;
+        if (Engine._premoveProcessedFens.has(fenHash)) return;
         const game = getGame();
-        if (!game || isPlayersTurn(game)) {
-            State.premoveExecutedForFen = null;
-            return;
-        }
-
-        if (State.premoveAnalysisInProgress) {
-            State.statusInfo = "[PremoveCheck] Analysis already in progress";
-            return;
-        }
-
-        if (Engine._premoveLastFen === fenHash) {
-            State.statusInfo = "[PremoveCheck] Same position as last analysis";
-            return;
-        }
-
+        if (!game || isPlayersTurn(game)) { State.premoveExecutedForFen = null; return; }
+        if (State.premoveAnalysisInProgress) return;
+        if (Engine._premoveLastFen === fenHash) return;
         State.premoveAnalysisInProgress = true;
         State.premoveLastAnalysisTime = now;
-
         if (!Engine.premove) {
-            State.statusInfo = "[PremoveCheck] Loading premove engine";
             let loaded = Engine.loadPremoveEngine();
-            if (!loaded) {
-                State.premoveAnalysisInProgress = false;
-                return;
-            }
-
-            scheduleManagedTimeout(function () {
-                _startPremoveAnalysis(fen, fenHash);
-            }, 200);
+            if (!loaded) { State.premoveAnalysisInProgress = false; return; }
+            scheduleManagedTimeout(function () { _startPremoveAnalysis(fen, fenHash); }, 200);
         } else {
             _startPremoveAnalysis(fen, fenHash);
         }
@@ -3532,47 +2328,18 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     function _startPremoveAnalysis(fen, fenHash) {
-        State.statusInfo = `[PremoveCheck] Starting analysis for FEN: ${fenHash.substring(0, 30)}`;
-
-        Engine._premoveEngineBusy = true;
-        Engine._premoveLastFen = fenHash;
-        Engine._premoveLastActivityTs = Date.now();
-
-        Engine.premove.postMessage("stop");
-        Engine.premove.postMessage("ucinewgame");
-
+        Engine._premoveEngineBusy = true; Engine._premoveLastFen = fenHash; Engine._premoveLastActivityTs = Date.now();
+        Engine.premove.postMessage("stop"); Engine.premove.postMessage("ucinewgame");
         scheduleManagedTimeout(function () {
             const freshFen = getAccurateFen();
-            if (hashFen(freshFen) !== fenHash) {
-                State.statusInfo = "[PremoveCheck] FEN changed during setup, aborting";
-                Engine._premoveEngineBusy = false;
-                State.premoveAnalysisInProgress = false;
-                return;
-            }
-
+            if (hashFen(freshFen) !== fenHash) { Engine._premoveEngineBusy = false; State.premoveAnalysisInProgress = false; return; }
             Engine.premove.postMessage("position fen " + fen);
             Engine.premove.postMessage("go depth " + (State.premoveDepth || 15));
             Engine._premoveLastActivityTs = Date.now();
-
-            if (Engine._premoveTimeoutId) {
-                clearTimeout(Engine._premoveTimeoutId);
-                Engine._premoveTimeoutId = null;
-            }
-
-            Engine._premoveTimeoutId = setTimeout(function () {
-                State.statusInfo = "[PremoveCheck] Analysis timeout, resetting";
-                Engine._premoveEngineBusy = false;
-                State.premoveAnalysisInProgress = false;
-                Engine._premoveLastActivityTs = Date.now();
-                if (Engine.premove) {
-                    Engine.premove.postMessage("stop");
-                }
-            }, CONFIG.PREMOVE.ENGINE_TIMEOUT);
-
+            if (Engine._premoveTimeoutId) { clearTimeout(Engine._premoveTimeoutId); Engine._premoveTimeoutId = null; }
+            Engine._premoveTimeoutId = setTimeout(function () { Engine._premoveEngineBusy = false; State.premoveAnalysisInProgress = false; Engine._premoveLastActivityTs = Date.now(); if (Engine.premove) Engine.premove.postMessage("stop"); }, CONFIG.PREMOVE.ENGINE_TIMEOUT);
         }, 50);
-
-        State.statusInfo = "Smart premove analyzing...";
-        UI.updateStatusInfo();
+        State.statusInfo = "Smart premove analyzing..."; UI.updateStatusInfo();
     }
 
     function autoMatchCheck() {
@@ -4456,70 +3223,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
             State.onboardingAccepted = true;
         }
         if (typeof onAccept === "function") onAccept();
-        return;
-
-        let existing = $("#cap-welcome-overlay");
-        if (existing) return;
-
-        let overlay = document.createElement("div");
-        overlay.id = "cap-welcome-overlay";
-        overlay.className = "cap-welcome-overlay";
-        let panel = $("#chess-assist-panel");
-        if (panel) panel.style.display = "none";
-        overlay.innerHTML =
-            '<div class="cap-welcome-modal" role="dialog" aria-modal="true" aria-labelledby="cap-welcome-title">' +
-            '<div id="cap-welcome-title" class="cap-welcome-title">Selamat Datang di BINTANG TOBA</div>' +
-            '<div class="cap-welcome-subtitle">Tools ini dibuat untuk membantu latihan bermain catur dan memahami langkah lebih baik.</div>' +
-            '<ul class="cap-welcome-list">' +
-            '<li>Engine analysis dan saran langkah.</li>' +
-            '<li>PV arrows, bestmove arrows, dan highlight.</li>' +
-            '<li>Kontrol waktu, premove, dan mode analisis.</li>' +
-            '</ul>' +
-            '<div class="cap-welcome-warning"><span class="cap-welcome-warning-title">Peringatan</span><div class="cap-welcome-warning-line"></div><span class="cap-welcome-warning-body">Harap diperhatikan bahwa penggunaan aplikasi dapat melanggar aturan dan menyebabkan diskualifikasi atau larangan dari turnamen dan platform online. Pengembang aplikasi dan sistem terkait TIDAK akan dimintai pertanggung jawaban atas konsekuensi apa pun yang diakibatkan oleh penggunaannya. Kami sangat menyarankan untuk menggunakan aplikasi hanya dalam lingkungan yang terkendali secara etis.</span></div>' +
-            '<label class="cap-welcome-consent"><input type="checkbox" id="cap-consent-check"><span>Saya telah membaca, memahami, dan menyetujui syarat penggunaan di atas.</span></label>' +
-            '<div class="cap-welcome-actions">' +
-            '<button id="cap-consent-decline" class="cap-welcome-btn secondary" type="button">Keluar</button>' +
-            '<button id="cap-consent-accept" class="cap-welcome-btn primary" type="button" disabled>Setuju dan Lanjut</button>' +
-            '</div>' +
-            '</div>';
-
-        document.body.appendChild(overlay);
-
-        let checkbox = $("#cap-consent-check", overlay);
-        let acceptBtn = $("#cap-consent-accept", overlay);
-        let declineBtn = $("#cap-consent-decline", overlay);
-
-        if (!checkbox || !acceptBtn || !declineBtn) {
-            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-            if (typeof onAccept === "function") onAccept();
-            return;
-        }
-
-        let onCheckChange = function () {
-            acceptBtn.disabled = !checkbox.checked;
-        };
-        checkbox.addEventListener("change", onCheckChange);
-
-        let onAcceptClick = function () {
-            if (!checkbox.checked) return;
-            saveSetting("onboardingAccepted", true);
-            State.onboardingAccepted = true;
-            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-            if (panel) panel.style.display = "";
-            State.statusInfo = "Persetujuan diterima. Selamat berlatih.";
-            UI.updateStatusInfo();
-            if (typeof onAccept === "function") onAccept();
-        };
-        acceptBtn.addEventListener("click", onAcceptClick);
-
-        let onDeclineClick = function () {
-            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-            State.statusInfo = "Persetujuan diperlukan untuk melanjutkan.";
-            UI.updateStatusInfo();
-            if (panel) panel.style.display = "none";
-            applyPanelState("closed");
-        };
-        declineBtn.addEventListener("click", onDeclineClick);
     }
 
     function setupDrag(panel) {
@@ -5606,8 +4309,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         } catch (e) { }
         return null;
     }
-
-
 
     function detectPlayersTurnFromDOM() {
         try {
@@ -7101,8 +5802,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         return CCTAnalyzer.analyze(fen, uci, ourColor);
     }
 
-
-
     function updateCCTDebugSnapshot(stage, uci, cct, safety, extra) {
         if (!State) return;
 
@@ -7593,20 +6292,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
 
     };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     function getSquaresAttackedByPiece(fen, square, pieceType, color) {
         let squares = [];
         let f = "abcdefgh".indexOf(square[0]);
@@ -7878,17 +6563,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
             keys.forEach(function (k) { map.delete(k); });
         }
 
-        function trimObject(obj, maxSize, keepRatio) {
-            if (!obj) return;
-            let keys = Object.keys(obj);
-            if (keys.length <= maxSize) return;
-            let ratio = typeof keepRatio === "number" ? keepRatio : 0.7;
-            let keysToDelete = keys.length - Math.floor(maxSize * ratio);
-            keys.slice(0, Math.max(0, keysToDelete)).forEach(function (k) {
-                delete obj[k];
-            });
-        }
-
         let mapMax = 40;
         trimMap(predictedFenCache, mapMax, 0.7);
         trimMap(premoveSafetyCache, mapMax, 0.7);
@@ -7896,14 +6570,10 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         if (Syzygy && Syzygy.cache) {
             trimMap(Syzygy.cache, 60, 0.7);
         }
-
-        trimObject(ATTACK_CACHE, 200, 0.7);
     }
 
-
-
     // =====================================================
-    // Section 24: Evaluation Parsing
+    // Section 23: Evaluation Parsing
     // =====================================================
     function normalizeEvaluation(evaluation) {
         if (evaluation === null || evaluation === undefined || evaluation === "-" || evaluation === "Error") {
@@ -7943,7 +6613,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     // =====================================================
-    // Section 25: Premove Chance Calculation
+    // Section 24: Premove Chance Calculation
     // =====================================================
     function getBaseChanceFromParsedEval(parsed) {
         if (!parsed) return 0;
@@ -7975,12 +6645,10 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         if (!State.premoveEnabled) return 0;
         let game = getGame();
         if (!game || isPlayersTurn(game)) return 0;
-        let parsed = normalizeEvaluation(evaluation, ourColor);
+        let parsed = normalizeEvaluation(evaluation);
         if (!parsed) return 0;
         return getBaseChanceFromParsedEval(parsed);
     }
-
-
 
     function parsePVMoves(pv) {
         if (!pv || typeof pv !== "string") return [];
@@ -8004,7 +6672,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     // =====================================================
-    // Section 26: Time and Clock Functions
+    // Section 25: Time and Clock Functions
     // =====================================================
     function parseTimeString(timeString) {
         if (!timeString || typeof timeString !== "string") return null;
@@ -8068,7 +6736,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     // =====================================================
-    // Section 27: Syzygy Tablebase Probe
+    // Section 26: Syzygy Tablebase Probe
     // =====================================================
     let Syzygy = {
         cache: new Map(),
@@ -8293,7 +6961,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     };
 
     // =====================================================
-    // Section 28: Advanced Time Management
+    // Section 27: Advanced Time Management
     // =====================================================
     let TimeManager = {
         lastMoveTime: 0,
@@ -8474,7 +7142,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     // =====================================================
-    // Section 29: Opponent Rating and Depth Adaptation
+    // Section 28: Opponent Rating and Depth Adaptation
     // =====================================================
     function extractOpponentRating() {
         try {
@@ -8627,10 +7295,8 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         tryUpdate();
     }
 
-
-
     // =====================================================
-    // Section 30: Engine Management
+    // Section 29: Engine Management
     // =====================================================
     let Engine = {
         main: null,
@@ -8710,7 +7376,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
             try {
                 src = GM_getResourceText("stockfishjs");
             } catch (e) { }
-            if (!src || src.length < 1000) src = stockfishSourceCode;
+            if (!src || src.length < 1000) src = EngineLoader.stockfishSourceCode;
             if (!src || src.length < 1000) {
                 err("No Stockfish source available");
                 return {
@@ -8967,8 +7633,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
                 }
             }
 
-            checkAutoResign(scoreType, scoreValue);
-
             if (multipv === 1) {
                 let oldPV = State.mainPVLine.join(" ");
                 let newPV = pvMoves.join(" ");
@@ -9025,6 +7689,9 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
                 UI.updateStatusInfo();
                 return;
             }
+
+            let lastScore = State._lastScoreInfo;
+            if (lastScore) checkAutoResign(lastScore.type, lastScore.value);
 
             if (State.analysisMode) {
                 State.isThinking = false;
@@ -9286,7 +7953,11 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
                                 moveToPlay.substring(0, 2),
                                 moveToPlay.substring(2, 4),
                                 moveToPlay.length > 4 ? moveToPlay.substring(4) : null
-                            );
+                            ).then(function (moved) {
+                                if (!moved) log("[Analysis] Auto-play move failed, will retry next cycle");
+                            }).catch(function (e) {
+                                warn("[Analysis] Auto-play error:", e);
+                            });
                         }, delay);
                     }
                 }
@@ -9384,6 +8055,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
 
             if (data.indexOf("info") === 0 && data.includes(" pv ")) {
                 if (this._premoveProcessing) return;
+                if (!this._premoveEngineBusy) return;
 
                 this._premoveProcessing = true;
                 State.premoveAnalysisInProgress = true;
@@ -9517,7 +8189,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
                 const bestMove = tokens[1];
                 if (!bestMove || bestMove === "(none)") return;
 
-                if (!this._premoveProcessedFens.has(currentFenHash) && !premoveInFlight) {
+                if (!this._premoveProcessedFens.has(currentFenHash)) {
                     State.statusInfo = "[Premove] Got bestmove but no execution yet, waiting for PV...";
                 }
             }
@@ -9770,7 +8442,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     };
 
     // =====================================================
-    // Section 31: Engine Module Facade
+    // Section 30: Engine Module Facade
     // =====================================================
     Engine.Modules = {
         Lifecycle: {
@@ -9909,7 +8581,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     // =====================================================
-    // Section 32: Auto Analysis Functions
+    // Section 31: Auto Analysis Functions
     // =====================================================
     function shouldAutoAnalysisMove(bestMoveCandidate) {
         if (!State.analysisMode || State.autoAnalysisColor === "none") return false;
@@ -9996,7 +8668,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     // =====================================================
-    // Section 33: Stealth Move Executor
+    // Section 32: Stealth Move Executor
     // =====================================================
     let MoveExecutor = {
         _squareCache: new Map(),
@@ -10392,7 +9064,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     };
 
     // =====================================================
-    // Section 34: Auto Move Execution
+    // Section 33: Auto Move Execution
     // =====================================================
     function executeAction(selectedUci, analysisFen) {
         if (!selectedUci || selectedUci.length < 4) return;
@@ -10452,7 +9124,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     // =====================================================
-    // Section 35: ACPL Tracking
+    // Section 34: ACPL Tracking
     // =====================================================
     let ACPL = {
         onNewEval: function (newCp, mateVal) {
@@ -10514,7 +9186,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     };
 
     // =====================================================
-    // Section 36: Opening Book Management
+    // Section 35: Opening Book Management
     // =====================================================
     function weightedRandomMove(movesObj) {
         if (!movesObj) return null;
@@ -10634,7 +9306,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     };
 
     // =====================================================
-    // Section 37: Move History and Records
+    // Section 36: Move History and Records
     // =====================================================
     let MoveHistory = {
         add: function (move, evalText, depth, grade, moveTime, source) {
@@ -10692,7 +9364,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     };
 
     // =====================================================
-    // Section 38: User Interface Management
+    // Section 37: User Interface Management
     // =====================================================
     let UI = {
         _arrowElements: [],
@@ -10803,7 +9475,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
             if (!style) {
                 style = document.createElement('style');
                 style.id = 'stream-proof-styles';
-                style.textContent = `.chess - assist - arrow rect { stroke - width: 2px!important; opacity: 0.4!important; filter: none!important; } .chess - assist - pv - arrow line { stroke-width: 2px!important; opacity: 0.3!important;}.chess - assist - pv - arrow circle { r: 6!important; opacity: 0.4!important; } .chess - assist - pv - arrow text { display: none!important; } `;
+                style.textContent = `.chess-assist-arrow rect{stroke-width:2px!important;opacity:0.4!important;filter:none!important}.chess-assist-pv-arrow line{stroke-width:2px!important;opacity:0.3!important}.chess-assist-pv-arrow circle{r:6!important;opacity:0.4!important}.chess-assist-pv-arrow text{display:none!important}`;
                 document.head.appendChild(style);
             }
         },
@@ -10822,9 +9494,33 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
             if (evalEl) { evalEl.textContent = evalText || "0.00"; evalEl.className = "eval " + (evalClass || "eval-equal"); }
         },
 
+        _refreshEvalBarStatus: function () {
+            let status = this._resolveEvalBarStatus();
+            if (State._lastShownEvalBarStatus === status) return;
+            State._lastShownEvalBarStatus = status;
+            if (typeof State._lastEvalBarCp === "number") {
+                this.updateEvalBar(State._lastEvalBarCp, State._lastEvalBarMate, State._lastEvalBarDepth);
+            }
+        },
+
+        _resolveEvalBarStatus: function () {
+            if (State.moveExecutionInProgress) {
+                let elapsed = State.moveStartTime ? ((Date.now() - State.moveStartTime) / 1000).toFixed(1) : "0.0";
+                return "Moving in " + elapsed + "s";
+            }
+            if (!Engine || (!Engine._ready && !Engine.main)) return "Engine Loading...";
+            if (!Engine._ready && Engine.main) return "Engine Init...";
+            if (State.isThinking) return "Analyzing...";
+            if (State.isAnalysisThinking) return "Analysis Running";
+            if (!isPlayersTurn()) return "Opponent's Turn";
+            if (State.autoRun) return "⏳ Waiting";
+            return "Ready";
+        },
+
         updateEvalBar: function (rawCp, mateVal, depth) {
             let fill = $("#evaluationFillAutoRun"); let text = $("#autoRunStatusText");
             if (!fill || !text) return;
+            State._lastEvalBarCp = rawCp; State._lastEvalBarMate = mateVal; State._lastEvalBarDepth = depth;
             fill.style.transition = "width 0.5s ease, background-color 0.5s ease";
             let pct = 50, color = "#9E9E9E", label = "0.00", emo = "";
             let deltaCp = 0;
@@ -10848,7 +9544,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
                 else { emo = smoothCp > 0 ? "😊 Unggul" : "😟 Tertekan"; }
             }
             fill.style.width = pct + "%"; fill.style.backgroundColor = color;
-            let status = State.statusInfo || (State.autoRun ? (State.isThinking ? "ANALYZING..." : "READY") : "OFF");
+            let status = this._resolveEvalBarStatus();
             let deltaText = "";
             if (typeof State.lastEvalDeltaCp === "number" && State.lastEvalDeltaCp !== 0) {
                 let deltaPawn = (State.lastEvalDeltaCp / 100).toFixed(2);
@@ -11101,9 +9797,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         },
 
         _doPVDraw: function (pvMoves, startingTurn, pvStr, board, container, isAnalysis) {
-            this._removePVArrowsByType(isAnalysis);
-            if (isAnalysis) { State.lastRenderedAnalysisPV = pvStr; State.lastAnalysisPVDrawTime = Date.now(); }
-            else { State.lastRenderedMainPV = pvStr; State.lastMainPVDrawTime = Date.now(); }
             this._lastDrawnIsAnalysis = isAnalysis;
             let maxMoves = Math.min(pvMoves.length, State.maxPVDepth); let frag = document.createDocumentFragment();
             let pvColors = State.pvArrowColors || {};
@@ -11200,7 +9893,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     };
 
     // =====================================================
-    // Section 39: UI Module Facade
+    // Section 38: UI Module Facade
     // =====================================================
     UI.Modules = {
         Core: { updateStatusInfo: UI.updateStatusInfo.bind(UI), updateClock: UI.updateClock.bind(UI), updateTurnLEDs: UI.updateTurnLEDs.bind(UI), clearAll: UI.clearAll.bind(UI) },
@@ -11212,7 +9905,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     };
 
     // =====================================================
-    // Section 40: Auto Resignation Logic
+    // Section 39: Auto Resignation Logic
     // =====================================================
     function checkAutoResign(scoreType, scoreValue) {
         if (!State.autoResignEnabled || State.gameEnded) return;
@@ -11220,7 +9913,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         let trigger = false;
         if (State.resignMode === "cp") { if (scoreType === "cp" && scoreValue <= -Math.abs(State.autoResignThresholdCp)) { trigger = true; } }
         else if (State.resignMode === "mate") { if (scoreType === "mate" && scoreValue < 0) { const movesToMate = Math.abs(scoreValue); if (movesToMate <= State.autoResignThresholdMate) { trigger = true; } } }
-        if (trigger) { _resignTriggerCount++; if (_resignTriggerCount >= _resignTriggerNeeded) { State.statusInfo = `Auto - resign triggered: ${scoreType} ${scoreValue} `; console.log(State.statusInfo); _resignTimeout = setTimeout(resignGame, 1500); } }
+        if (trigger) { _resignTriggerCount++; if (_resignTriggerCount >= _resignTriggerNeeded) { State.statusInfo = `Auto-resign triggered: ${scoreType} ${scoreValue}`; console.log(State.statusInfo); _resignTimeout = setTimeout(resignGame, 1500); } }
         else { _resignTriggerCount = 0; }
     }
 
@@ -11254,7 +9947,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     // =====================================================
-    // Section 41: Auto Match System
+    // Section 40: Auto Match System
     // =====================================================
     let AutoMatch = {
         inProgress: false, lastAttemptTime: 0, attemptCount: 0, MAX_ATTEMPTS: 3, COOLDOWN_MS: 10000, ACTION_DELAY_MS: 10000, LANGUAGE_MODE: "auto",
@@ -11317,7 +10010,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     };
 
     // =====================================================
-    // Section 42: Panel State Management
+    // Section 41: Panel State Management
     // =====================================================
     function applyPanelState(state) {
         let panel = $("#chess-assist-panel");
@@ -11332,7 +10025,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     }
 
     // =====================================================
-    // Section 43: New Game Action Detection
+    // Section 42: New Game Action Detection
     // =====================================================
     let newGameActionMouseDownHandler = function (e) {
         if (AutoMatch && typeof AutoMatch._isAllowedContext === "function" && !AutoMatch._isAllowedContext()) {
@@ -11419,7 +10112,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
     _eventListeners.push({ element: document, type: "mousedown", handler: newGameActionMouseDownHandler, options: true });
 
     // =====================================================
-    // Section 44: Initialization and Main Loop
+    // Section 43: Initialization and Main Loop
     // =====================================================
     function handleNewGame() {
         log("[NewGame] Detected! Resetting all state");
@@ -11433,7 +10126,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         premoveSafetyCache.clear();
         CCTAnalyzer.clearCache();
         ThreatDetectionSystem.clearCache();
-        Object.keys(ATTACK_CACHE).forEach(function (k) { delete ATTACK_CACHE[k]; });
 
         ACPL.reset();
         MoveHistory.clear();
@@ -11504,6 +10196,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
             const startedAt = RuntimeGuard._nowMs();
             try {
                 UI.updateClock();
+                if (UI && typeof UI._refreshEvalBarStatus === "function") UI._refreshEvalBarStatus();
             } catch (e) { }
             RuntimeGuard.trackLoop("clockLoop", startedAt);
             scheduleManagedTimeout(clockLoop, 1000 + randomInt(-150, 150));
@@ -11781,7 +10474,6 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
         CCTAnalyzer.clearCache();
         ThreatDetectionSystem.clearCache();
         Syzygy.clear();
-        Object.keys(ATTACK_CACHE).forEach(function (k) { delete ATTACK_CACHE[k]; });
 
         if (_premoveCacheClearInterval) {
             clearInterval(_premoveCacheClearInterval);
