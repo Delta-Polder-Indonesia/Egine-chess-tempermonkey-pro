@@ -96,6 +96,7 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @resource     stockfishjs  https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js
+// @resource     openingbook  https://raw.githubusercontent.com/JD-YH03D/data-puzzel/refs/heads/main/opening-book.JSON
 // @connect      localhost
 // @connect      cdnjs.cloudflare.com
 // @connect      unpkg.com
@@ -524,225 +525,100 @@ DANGER ZONE - DO NOT PROCEED IF YOU DON'T KNOW WHAT YOU'RE DOING DANGER ZONE - D
 
     let PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
 
-    let OPENING_BOOK = {
+    let _OPENING_BOOK_CACHE = null;
+    let _OPENING_NAMES_CACHE = null;
+
+    let _openingBookLoadAttempted = false;
+
+    function _loadOpeningBookExternal() {
+        if (_OPENING_BOOK_CACHE) return;
+        if (_openingBookLoadAttempted) return;
+        _openingBookLoadAttempted = true;
+
+        function _parseBookJSON(text) {
+            try {
+                let data = JSON.parse(text);
+                if (data && data.book && typeof data.book === "object") {
+                    _OPENING_BOOK_CACHE = data.book;
+                    _OPENING_NAMES_CACHE = data.names || null;
+                    log("[OpeningBook] Loaded " + Object.keys(_OPENING_BOOK_CACHE).length + " positions");
+                    return true;
+                }
+            } catch (e) {
+                warn("[OpeningBook] JSON parse failed:", e);
+            }
+            return false;
+        }
+
+        try {
+            let raw = GM_getResourceText("openingbook");
+            if (raw && raw.length > 200 && _parseBookJSON(raw)) return;
+        } catch (e) { }
+
+        try {
+            GM_xmlhttpRequest({
+                method: "GET",
+                url: "https://raw.githubusercontent.com/JD-YH03D/data-puzzel/refs/heads/main/opening-book.JSON",
+                timeout: 8000,
+                onload: function (r) {
+                    if (r && r.status === 200 && r.responseText && r.responseText.length > 200) {
+                        _parseBookJSON(r.responseText);
+                    }
+                },
+                onerror: function () { warn("[OpeningBook] Fetch failed"); }
+            });
+        } catch (e2) { warn("[OpeningBook] Request failed"); }
+    }
+
+    let OPENING_BOOK = new Proxy({}, {
+        get: function (target, prop) {
+            _loadOpeningBookExternal();
+            if (_OPENING_BOOK_CACHE && _OPENING_BOOK_CACHE[prop] !== undefined) return _OPENING_BOOK_CACHE[prop];
+            return _OPENING_BOOK_FALLBACK[prop];
+        },
+        ownKeys: function () {
+            _loadOpeningBookExternal();
+            let keys = _OPENING_BOOK_CACHE ? Object.keys(_OPENING_BOOK_CACHE) : [];
+            if (keys.length === 0) keys = Object.keys(_OPENING_BOOK_FALLBACK);
+            return keys;
+        },
+        getOwnPropertyDescriptor: function (target, prop) { return { configurable: true, enumerable: true, value: OPENING_BOOK[prop] }; }
+    });
+
+    let OPENING_NAMES = new Proxy({}, {
+        get: function (target, prop) {
+            _loadOpeningBookExternal();
+            if (_OPENING_NAMES_CACHE && _OPENING_NAMES_CACHE[prop] !== undefined) return _OPENING_NAMES_CACHE[prop];
+            return _OPENING_NAMES_FALLBACK[prop];
+        }
+    });
+
+    // Embedded fallback — 5 core positions for instant first-move response
+    let _OPENING_BOOK_FALLBACK = {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": {
-            "e2e4": 4, "d2d4": 3, "c2c4": 2, "g1f3": 2,
-            "b2b3": 1, "g2g3": 1, "f2f4": 1, "b1c3": 1, "e2e3": 1
+            "e2e4": 4, "d2d4": 3, "c2c4": 2, "g1f3": 2, "b1c3": 1
         },
         "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3": {
-            "c7c5": 3, "e7e5": 3, "e7e6": 2, "c7c6": 2,
-            "d7d6": 1, "g7g6": 1, "d7d5": 1, "g8f6": 1, "b7b6": 1, "b8c6": 1
+            "c7c5": 3, "e7e5": 3, "e7e6": 2, "c7c6": 2, "d7d5": 1
         },
         "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6": {
-            "g1f3": 3, "f1c4": 2, "f1b5": 2, "b1c3": 2,
-            "d2d4": 1, "f2f4": 1, "g1e2": 1, "c2c3": 1, "b2b4": 1
-        },
-        "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-            "d2d4": 3, "g1f3": 2, "c2c4": 1, "b1c3": 1, "f1d3": 1
-        },
-        "rnbqkbnr/pp1ppppp/2p5/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-            "d2d4": 3, "g1f3": 1, "b1c3": 1, "c2c4": 1, "f1c4": 1
-        },
-        "rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-            "d2d4": 2, "g1f3": 2, "b1c3": 1, "f1c4": 1, "c2c4": 1
-        },
-        "rnbqkbnr/ppp1pppp/6p1/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-            "d2d4": 2, "g1f3": 2, "b1c3": 1, "f1c4": 1, "c2c4": 1
-        },
-        "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6": {
-            "e4d5": 2, "d2d4": 1, "g1f3": 1, "b1c3": 1
-        },
-        "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-            "e4e5": 2, "b1c3": 2, "g1f3": 2, "d2d4": 2
+            "g1f3": 3, "f1c4": 2, "b1c3": 2, "d2d4": 1
         },
         "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3": {
-            "d7d5": 3, "g8f6": 3, "c7c5": 2, "e7e6": 2,
-            "f7f5": 1, "d7d6": 1, "g7g6": 1, "b7b5": 1
-        },
-        "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq -": {
-            "b1c3": 2, "g1f3": 2, "c4d5": 2, "e2e3": 1, "g2g3": 1
-        },
-        "rnbqkbnr/pp2pppp/2p5/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq -": {
-            "g1f3": 2, "b1c3": 2, "e2e3": 1, "g2g3": 1
-        },
-        "rnbqkb1r/pppppp1p/5np1/8/2PP4/8/PP2PPPP/RNBQKBNR w KQkq -": {
-            "b1c3": 2, "g1f3": 2, "e2e4": 2, "f2f3": 1, "g2g3": 1
-        },
-        "rnbqkb1r/pppppp1p/5np1/8/2PP4/2N5/PP2PPPP/R1BQKBNR b KQkq -": {
-            "d7d5": 3, "c7c5": 2, "g7g6": 1, "b8c6": 1
+            "d7d5": 3, "g8f6": 3, "c7c5": 2, "e7e6": 2
         },
         "rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3": {
-            "e7e5": 3, "c7c5": 2, "g8f6": 2, "e7e6": 2,
-            "g7g6": 1, "b7b6": 1, "d7d5": 1
-        },
-        "rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq -": {
-            "d7d5": 3, "g8f6": 3, "c7c5": 2, "g7g6": 2,
-            "d7d6": 1, "b7b6": 1
-        },
-        "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -": {
-            "d7d6": 2, "e7e6": 2, "b8c6": 2, "g7g6": 2,
-            "a7a6": 1, "e7e5": 1, "g8f6": 1
-        },
-        "rnbqkb1r/1p3ppp/p2ppn2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq -": {
-            "f1e2": 2, "f1c4": 2, "g1f3": 1, "a2a4": 2, "h2h3": 1
-        },
-        "rnbqkb1r/pp2pp1p/3p1np1/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq -": {
-            "f1e3": 2, "f1c4": 2, "g2g3": 2, "h2h4": 1, "c1e3": 1
-        },
-        "r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/R1BQK2R w KQkq -": {
-            "e1g1": 2, "d2d3": 2, "b5c6": 2, "d2d4": 1
-        },
-        "r1bq1rk1/2p1bppp/p1n2n2/1p1pp3/4P3/1BP2N2/PP1P1PPP/RNBQR1K1 w - -": {
-            "e4d5": 3, "a2a4": 2, "h2h3": 1, "b1d2": 1
-        },
-        "rnbqk1nr/ppp2ppp/4p3/3p4/1b1PP3/2N5/PPP2PPP/R1BQKBNR w KQkq -": {
-            "e4e5": 2, "a2a3": 2, "c1d2": 2, "g1f3": 1
-        },
-        "rnbqkb1r/ppp2ppp/4pn2/3p4/3PP3/2N5/PPP2PPP/R1BQKBNR w KQkq -": {
-            "e4e5": 2, "c1g5": 2, "g1f3": 2, "f1d3": 1
-        },
-        "rn1qkbnr/pp2pppp/2p5/5b2/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -": {
-            "g1f3": 2, "f2f3": 2, "c2c4": 2, "f1d3": 1
-        },
-        "rnbqkbnr/pp2pppp/2p5/3pP3/3P4/8/PPP2PPP/RNBQKBNR b KQkq -": {
-            "c8f5": 2, "e7e6": 2, "c6c5": 1, "g8h6": 1, "b8d7": 1
-        },
-        "rnbqkbnr/ppp1pppp/8/8/2pP4/8/PP2PPPP/RNBQKBNR w KQkq -": {
-            "e2e4": 2, "e2e3": 2, "g1f3": 2, "b1c3": 2
-        },
-        "rnbqkb1r/ppp2ppp/5n2/3p2B1/3P4/2N5/PP2PPPP/R2QKBNR b KQkq -": {
-            "f8e7": 2, "b8d7": 2, "h7h6": 2, "c7c6": 1
-        },
-        "rnbq1rk1/ppp2pbp/3p1np1/4p3/2PPP3/2N2N2/PP2BPPP/R1BQK2R w KQ -": {
-            "d4e5": 3, "c1e3": 2, "c1g5": 1, "f1e1": 1
-        },
-        "rnbqk2r/ppp1ppbp/3p2p1/8/2PPP3/2N2P2/PP4PP/R1BQKBNR b KQkq -": {
-            "e8g8": 2, "b8c6": 2, "c7c6": 1, "c7c5": 1, "e7e5": 1
-        },
-        "rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N1P3/PP3PPP/R1BQKBNR b KQkq -": {
-            "e8g8": 2, "d7d5": 2, "c7c5": 2, "b7b6": 1
-        },
-        "rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2NQ4/PP2PPPP/R1B1KBNR b KQkq -": {
-            "e8g8": 2, "d7d5": 2, "c7c5": 2, "g7g6": 1
-        },
-        "rnbqk2r/p1pp1ppp/bp2pn2/8/2PP4/1P3NP1/P3PP1P/R1B1KBNR b KQkq -": {
-            "f8b4": 2, "c8b7": 2, "d7d5": 2, "h7h6": 1
-        },
-        "rnbq1rk1/ppp1ppbp/3p1np1/5p2/2PP4/5NP1/PP2PPBP/RNBQ1RK1 w - -": {
-            "b1c3": 2, "d4d5": 2, "c4c5": 2, "d2d3": 1
-        },
-        "rnbq1rk1/pp4pp/2p1pn2/3p1p2/2PP4/5NP1/PP2PPBP/RNBQ1RK1 w - -": {
-            "b1d2": 2, "d4e5": 2, "c4d5": 2, "d1c2": 1
-        },
-        "r1bq1rk1/pp1pppbp/2n2np1/2p5/2PP4/2N2NP1/PP2PPBP/R1BQ1RK1 b - -": {
-            "c5d4": 2, "d7d5": 2, "c6d4": 2, "e7e6": 1
-        },
-        "r2qk2r/ppp1bppp/4b3/3n4/3Q4/2N3P1/PP2PPBP/R1B2RK1 b kq -": {
-            "b8c6": 2, "d5c3": 2, "d8d4": 2, "e8g8": 1
-        },
-        "rn1qkb1r/pp3ppp/2p1pn2/3p1b2/8/3P1NP1/PPPNPPBP/R1BQ1RK1 b kq -": {
-            "h7h6": 2, "a7a5": 2, "b8d7": 2, "f8d6": 1
-        },
-        "r1bq1rk1/pppnbppp/4pn2/3p4/2PP4/5NP1/PPQ1PPBP/R1BR2K1 b - -": {
-            "c7c5": 2, "b7b6": 2, "c7c6": 2, "a7a6": 1
-        },
-        "r2q1rk1/1pp1bppp/p1n1pn2/8/P1pP4/2N2NP1/1PQ1PPBP/R1BR2K1 b - -": {
-            "b7b5": 2, "b7b6": 2, "a6a5": 2, "h7h6": 1
+            "e7e5": 3, "c7c5": 2, "g8f6": 2, "e7e6": 2
         }
     };
 
-    const OPENING_NAMES = {
-        // 1. e4 Openings
-        "e2e4": "King's Pawn Opening",
-        "e7e5": "Open Game",
-        "c7c5": "Sicilian Defense",
-        "e7e6": "French Defense",
-        "c7c6": "Caro-Kann Defense",
-        "d7d6": "Pirc Defense",
-        "d7d5": "Scandinavian Defense",
-        "g8f6": "Alekhine's Defense",
-        "f7f5": "Dutch Defense",
-        "g7g6": "Modern Defense",
-        "b8c6": "Nimzowitsch Defense",
-
-        // 1. e4 e5 Specific Variations
-        "f1b5": "Ruy López Opening",
-        "f1c4": "Italian Game",
-        "f2f4": "King's Gambit",
-        "g1f3": "Scotch Game",
-        "b1c3": "Vienna Game",
-        "d2d4": "Center Game",
-        "c2c3": "Ponziani Opening",
-        "f1d3": "Bishop's Opening",
-
-        // 1. d4 Openings
-        "d2d4": "Queen's Pawn Game",
-        "d7d5": "Closed Game",
-        "c7c6": "Slav Defense",
-        "g8f6": "Indian Defense",
-        "c7c5": "Benoni Defense",
-        "f7f5": "Dutch Defense",
-        "g7g6": "King's Indian Defense",
-        "b8c6": "Chigorin Defense",
-        "e7e5": "Englund Gambit",
-
-        // 1. d4 d5 2. c4 Openings
-        "c2c4": "Queen's Gambit",
-        "e7e6": "Queen's Gambit Declined",
-        "d5c4": "Queen's Gambit Accepted",
-
-        // Indian Defenses (after 1.d4 Nf6)
-        "b1c3": "Nimzo-Indian Defense",
-        "e2e3": "Bogo-Indian Defense",
-        "g2g3": "Catalan Opening",
-        "c1g5": "Trompowsky Attack",
-        "c1f4": "London System",
-        "d7d5": "Grünfeld Defense",
-        "e7e6": "Queen's Indian Defense",
-        "b7b5": "Benko Gambit",
-        "c7c5": "Benoni Defense: Modern Variation",
-
-        // Other Flank Openings (1.Nf3, 1.c4, etc.)
-        "g1f3": "Réti Opening",
-        "c2c4": "English Opening",
-        "f2f4": "Bird's Opening",
-        "g2g3": "King's Indian Attack",
-        "b2b3": "Nimzowitsch-Larsen Attack",
-        "b2b4": "Polish Opening",
-        "g2g4": "Grob Opening",
-
-        // Long-form notation entries
-        "1.e4 d6 2.d4 Nf6": "Pirc Defense",
-        "1.e4 d6 2.d4 Nf6 3.Nc3 g6": "Pirc Defense",
-        "1.e4 e5 2.f4": "King's Gambit",
-        "1.e4 Nf6": "Alekhine's Defense",
-        "1.e4 e6": "French Defense",
-        "1.e4 c6": "Caro-Kann Defense",
-        "1.e4 d5": "Scandinavian Defense",
-        "1.e4 c5": "Sicilian Defense",
-        "1.e4 e5 2.Nf3 Nc6 3.Bc4": "Italian Game",
-        "1.e4 e5 2.Nf3 Nc6 3.Bb5": "Ruy López Opening",
-
-        "1.d4 d5 2.c4": "Queen's Gambit",
-        "1.d4 Nf6 2.c4 e6 3.Nc3": "Nimzo-Indian Defense",
-        "1.d4 Nf6 2.c4 e6 3.Nf3": "Queen's Indian Defense",
-        "1.d4 Nf6 2.c4 g6 3.Nc3": "King's Indian Defense",
-        "1.d4 Nf6 2.c4 g6 3.Nc3 d5": "Grünfeld Defense",
-        "1.d4 Nf6 2.c4 e6 3.g3": "Catalan Opening",
-        "1.d4 Nf6 2.c4 e6 3.Nf3 Bb4+": "Bogo-Indian Defense",
-        "1.d4 Nf6 2.c4 c5 3.d5": "Benoni Defense: Modern Variation",
-        "1.d4 Nf6 2.Bg5": "Trompowsky Attack",
-        "1.d4 Nf6 2.c4 c5 3.d5 b5": "Benko Gambit",
-        "1.d4 d5 2.Bf4": "London System",
-        "1.d4 f5": "Dutch Defense",
-
-        "1.Nf3": "Réti Opening",
-        "1.c4": "English Opening",
-        "1.f4": "Bird's Opening",
-        "1.g3": "King's Indian Attack",
-        "1.b3": "Nimzowitsch-Larsen Attack",
-        "1.b4": "Polish Opening",
-        "1.g4": "Grob Opening"
+    let _OPENING_NAMES_FALLBACK = {
+        "e2e4": "King's Pawn Opening", "d2d4": "Queen's Pawn Game",
+        "c2c4": "English Opening", "g1f3": "Réti Opening",
+        "e7e5": "Open Game", "c7c5": "Sicilian Defense",
+        "e7e6": "French Defense", "c7c6": "Caro-Kann Defense",
+        "d7d5": "Scandinavian Defense", "g8f6": "Alekhine's Defense",
+        "f1c4": "Italian Game", "b1c3": "Vienna Game"
     };
 
     // =====================================================
